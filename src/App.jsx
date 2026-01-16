@@ -39,6 +39,11 @@ import ExportModal from './components/ExportModal';
 import GlobalModal from './components/GlobalModal';
 import FormRow from './components/FormRow';
 
+// ★★★ 管理員白名單 ★★★
+// 只有在這個名單內的 Email 登入，才能看到紅色板手
+// 您可以依需求新增，例如: ['admin@school.admin', 'boss@school.admin']
+const ADMIN_EMAILS = [`268${DEFAULT_DOMAIN}`]; 
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [forms, setForms] = useState([]);
@@ -498,11 +503,11 @@ export default function App() {
     setIsManageModalOpen(true);
   };
   
+  // 開啟除錯清理視窗
   const handleDebugClear = () => {
     setIsDebugClearOpen(true);
   };
 
-  // --- 修正後的 CSV 匯入邏輯 (強制清除 BOM 與 重複檢查) ---
   const handleImportCSV = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -513,11 +518,9 @@ export default function App() {
       const rows = rawRows.map(row => parseCSVLine(row));
       
       const header = rows[0];
-      // FIX: 移除 BOM 並 trim
-      const cleanHeader = header ? header.map(h => h.replace(/^\uFEFF/, '').trim()) : [];
-
-      const isNewFormat = cleanHeader.some(h => h.includes('品項名稱')) && cleanHeader.some(h => h.includes('單價'));
-      const isSystemExport = cleanHeader[0] && cleanHeader[0].includes('流水號'); 
+      // 修正：使用 includes 確保即使有 BOM 也能抓到欄位
+      const isNewFormat = header && header.some(h => h.includes('品項名稱')) && header.some(h => h.includes('單價'));
+      const isSystemExport = header && header[0] && header[0].includes('流水號'); 
       const dataRows = rows.slice(1).filter(r => r.length > 5 && r[0]);
 
       if (dataRows.length === 0) { 
@@ -531,18 +534,10 @@ export default function App() {
           let count = 0;
           const currentYear = new Date().getFullYear();
           const formsMap = new Map();
-          
-          // FIX: 建立現有資料的 Set，用於比對重複
-          const existingSerialIds = new Set(forms.map(f => f.serialId));
 
-          dataRows.forEach((row, index) => {
+          dataRows.forEach((row) => {
              if (isNewFormat || isSystemExport) {
-                // --- 新格式/系統匯出處理 ---
                 const serialId = row[0];
-                
-                // FIX: 如果該流水號已存在於資料庫，直接略過 (防止重複匯入)
-                if (existingSerialIds.has(serialId)) return;
-
                 if (!formsMap.has(serialId)) {
                     const statusLabel = row[14];
                     let status = LABEL_TO_STATUS[statusLabel] || 'COMPLETED';
@@ -569,62 +564,12 @@ export default function App() {
                 });
                 formObj.data.totalPrice += itemSubtotal;
                 formObj.data.subject = formObj.data.items.map(i => i.subject).join('、');
-            } else {
-                // --- 舊格式 (Legacy) 處理 ---
-                const vMonth = String(parseInt(row[0])).padStart(2,'0');
-                const vDay = String(parseInt(row[1])).padStart(2,'0');
-                const serialNo = row[6] || (index + 1);
-                const serialId = `(${vMonth}-${vDay}-${serialNo})`;
-
-                // FIX: 舊格式也要檢查重複
-                if (existingSerialIds.has(serialId)) return;
-
-                const appMonthRaw = parseInt(row[3]);
-                const appDayRaw = parseInt(row[4]);
-                const appDateStr = (!isNaN(appMonthRaw) && !isNaN(appDayRaw)) ? `${appMonthRaw}/${appDayRaw}` : '';
-                const unit = (unitOptions && unitOptions.length > 0) ? unitOptions[0] : '未分類';
-                const subject = row[8] || '舊檔匯入';
-                const rawAmount = row[9] || '0';
-                const cleanAmount = parseInt(rawAmount.replace(/[$,]/g, '')) || 0;
-                const vendor = row[11] || '';
-                const remark = row[12];
-                let globalRemark = '';
-                if (remark) globalRemark += `[備註:${remark}]`;
-                
-                let timestamp = new Date().toISOString();
-                if (!isNaN(parseInt(row[0])) && !isNaN(parseInt(row[1]))) {
-                    const recordDate = new Date(currentYear, parseInt(row[0]) - 1, parseInt(row[1]));
-                    if (!isNaN(recordDate.getTime())) timestamp = recordDate.toISOString();
-                }
-
-                const legacyDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'school_forms'));
-                batch.set(legacyDocRef, {
-                    serialId, 
-                    unit: unit, 
-                    applicant: '舊檔資料', 
-                    applicationDate: appDateStr, 
-                    subject: subject, 
-                    totalPrice: cleanAmount, 
-                    status: 'COMPLETED', // 舊檔預設結案 Phase 3
-                    vendor: vendor, 
-                    globalRemark: globalRemark.trim(), 
-                    isUrgent: false, 
-                    logs: [{ status: 'COMPLETED', timestamp: timestamp, note: '舊檔批次匯入存檔' }], 
-                    items: [{ subject: subject, quantity: 1, measureUnit: '批', unitPrice: cleanAmount, subtotal: cleanAmount }], 
-                    createdAt: serverTimestamp(), 
-                    updatedAt: serverTimestamp()
-                });
-                count++;
             }
           });
-          
           formsMap.forEach((formObj) => { batch.set(formObj.docRef, formObj.data); count++; });
           await batch.commit();
-          openAlert('匯入成功', `成功匯入 ${count} 筆新資料 (已自動略過重複)。`);
-        } catch (err) { 
-            console.error(err);
-            openAlert('匯入錯誤', '資料格式有誤或寫入失敗。', 'danger'); 
-        }
+          openAlert('匯入成功', `成功合併並匯入 ${count} 筆申請單。`);
+        } catch (err) { openAlert('匯入錯誤', '資料格式有誤或寫入失敗。', 'danger'); }
       }});
     };
     reader.readAsText(file);
@@ -863,7 +808,10 @@ export default function App() {
             <label className="flex items-center gap-2 bg-slate-50 border px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-100 text-sm font-medium transition-colors h-10">
               <Upload size={16} /> 舊檔匯入 <input type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
             </label>
-            <button onClick={handleDebugClear} className="p-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-600 h-10 w-10 flex items-center justify-center" title="清除測試資料"><Wrench size={20} /></button>
+            {/* 只讓白名單內的管理員看到紅色板手 */}
+            {user && ADMIN_EMAILS.includes(user.email) && (
+              <button onClick={handleDebugClear} className="p-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-600 h-10 w-10 flex items-center justify-center" title="清除測試資料"><Wrench size={20} /></button>
+            )}
             <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-white border rounded-lg hover:bg-slate-50 h-10 w-10 flex items-center justify-center"><Settings size={20} /></button>
             <button onClick={handleLogout} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-500 h-10 w-10 flex items-center justify-center" title="登出"><LogOut size={20} /></button>
             <button onClick={handleOpenCreate} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-bold transition-all h-10"><Plus size={18} /> 新增申請單</button>
