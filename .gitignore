@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+build/
 *.local
 
 # Editor directories and files
@@ -22,3 +23,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# 忽略環境變數檔案 (保護您的 API Key)
+.env
+.env.local
+.env.*
