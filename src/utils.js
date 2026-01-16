@@ -1,5 +1,8 @@
 import { STATUS_STEPS } from './constants';
 
+/**
+ * 將 ISO 日期字串 (2023-12-25) 轉為民國格式 (112-12/25)
+ */
 export const isoToMinguo = (isoDateStr) => {
   if (!isoDateStr) return '';
   const parts = isoDateStr.split('-');
@@ -7,9 +10,14 @@ export const isoToMinguo = (isoDateStr) => {
   return `${parseInt(parts[0]) - 1911}-${parts[1]}/${parts[2]}`; 
 };
 
+/**
+ * 將民國字串 (1120101 或 112-01-01) 轉回 ISO 格式
+ */
 export const minguoToIso = (minguoStr) => {
   if (!minguoStr) return '';
   let cleanStr = minguoStr.replace(/[^\d]/g, '');
+  
+  // 處理純數字格式 (e.g. 1120101)
   if (cleanStr.length === 6 || cleanStr.length === 7) {
     const yLen = cleanStr.length === 7 ? 3 : 2;
     const y = parseInt(cleanStr.substring(0, yLen)) + 1911;
@@ -17,6 +25,8 @@ export const minguoToIso = (minguoStr) => {
     const d = cleanStr.substring(yLen + 2);
     return `${y}-${m}-${d}`;
   }
+  
+  // 處理分隔符號格式
   const parts = minguoStr.split(/[-/.]/);
   if (parts.length === 3) {
       const y = parseInt(parts[0]) + 1911;
@@ -27,6 +37,9 @@ export const minguoToIso = (minguoStr) => {
   return '';
 };
 
+/**
+ * 格式化完整的日期時間 (YYYY/MM/DD HH:mm)
+ */
 export const formatDate = (isoString) => {
   if (!isoString) return '-';
   try {
@@ -41,6 +54,9 @@ export const formatDate = (isoString) => {
   } catch (e) { return '-'; }
 };
 
+/**
+ * Date 物件轉民國日期 (YYYY/MM/DD)
+ */
 export const toMinguoDate = (dateObj) => {
   if (!dateObj || isNaN(dateObj.getTime())) return '-';
   const y = dateObj.getFullYear() - 1911;
@@ -49,6 +65,9 @@ export const toMinguoDate = (dateObj) => {
   return `${y}/${m}/${d}`;
 };
 
+/**
+ * 產生月份篩選清單 (最近 12 個月)
+ */
 export const generateMonthList = () => {
   const months = [];
   const today = new Date();
@@ -61,15 +80,23 @@ export const generateMonthList = () => {
   return months.reverse();
 };
 
+/**
+ * 解析 CSV 單行資料 (包含處理引號與 BOM)
+ */
 export const parseCSVLine = (line) => {
+  // ★重要修改：移除行首可能存在的 BOM 字元，避免標題判斷錯誤
+  const cleanLine = line.replace(/^\uFEFF/, '');
+  
   const result = [];
   let start = 0;
   let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    if (line[i] === '"') {
+  
+  for (let i = 0; i < cleanLine.length; i++) {
+    if (cleanLine[i] === '"') {
       inQuotes = !inQuotes;
-    } else if (line[i] === ',' && !inQuotes) {
-      let field = line.substring(start, i);
+    } else if (cleanLine[i] === ',' && !inQuotes) {
+      let field = cleanLine.substring(start, i);
+      // 移除欄位前後的引號，並處理雙引號轉義
       if (field.startsWith('"') && field.endsWith('"')) {
           field = field.slice(1, -1).replace(/""/g, '"');
       }
@@ -77,14 +104,20 @@ export const parseCSVLine = (line) => {
       start = i + 1;
     }
   }
-  let field = line.substring(start);
+  
+  // 處理最後一個欄位
+  let field = cleanLine.substring(start);
   if (field.startsWith('"') && field.endsWith('"')) {
       field = field.slice(1, -1).replace(/""/g, '"');
   }
   result.push(field);
+  
   return result;
 };
 
+/**
+ * 取得操作人員顯示名稱
+ */
 export const getOperatorName = (user) => {
     if (!user) return '未知';
     if (user.isAnonymous) return '訪客';
@@ -92,6 +125,9 @@ export const getOperatorName = (user) => {
     return '管理員';
 };
 
+/**
+ * 產生 CSV 內容字串 (包含 BOM 以支援 Excel)
+ */
 export const generateCSV = (dataToExport) => {
     const headers = ['流水號', '原申請單日期', '是否速件', '申請日期', '申請單位', '申請人', '計畫補助', '廠商', '品項名稱', '數量', '單位', '單價', '小計', '領回人', '目前狀態', '目前狀態時間', '備註'];
     let csvRows = [];
@@ -108,6 +144,7 @@ export const generateCSV = (dataToExport) => {
       const statusStr = STATUS_STEPS[f.status]?.label || f.status;
       const statusTimeStr = f.updatedAt?.toDate ? formatDate(f.updatedAt.toDate().toISOString()) : '-';
       
+      // 如果有多個品項，將其拆分為多行
       if (f.items && f.items.length > 0) {
           f.items.forEach(item => {
               const row = [
@@ -132,7 +169,7 @@ export const generateCSV = (dataToExport) => {
               csvRows.push(row);
           });
       } else {
-          // Fallback for empty items
+          // 如果沒有品項的例外處理
           const row = [
             f.serialId, 
             appDateStr, 
@@ -153,9 +190,13 @@ export const generateCSV = (dataToExport) => {
       }
     });
     
+    // 加入 BOM (\uFEFF) 讓 Excel 能正確識別 UTF-8
     return '\uFEFF' + [headers.map(escape).join(','), ...csvRows].join('\n');
 };
 
+/**
+ * 觸發瀏覽器下載 CSV
+ */
 export const downloadCSV = (content, filename) => {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

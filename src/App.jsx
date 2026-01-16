@@ -3,8 +3,7 @@ import {
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
   signInAnonymously, 
-  signOut,
-  signInWithCustomToken
+  signOut
 } from 'firebase/auth';
 import { 
   collection, 
@@ -16,17 +15,17 @@ import {
   serverTimestamp, 
   deleteDoc, 
   setDoc,
-  enableIndexedDbPersistence,
   writeBatch
 } from 'firebase/firestore';
 import { 
-  Plus, Search, Calendar, Flame, Filter, Edit2, Upload, Download, LogOut, FileText, Clock, FileDown, FolderCog, ShoppingCart, X, Loader2, Settings, Box, Wrench 
+  Plus, Search, Calendar, Flame, Filter, Edit2, Upload, Download, LogOut, FileText, Clock, FolderCog, ShoppingCart, X, Loader2, Settings, Box, Wrench, Activity
 } from 'lucide-react';
 
 // --- 引入拆分出去的設定與工具 ---
 import { auth, db, appId } from './firebase'; 
 import { STATUS_STEPS, DEFAULT_UNITS, DEFAULT_PROJECTS, DEFAULT_VENDORS, DEFAULT_DOMAIN, REVERSE_STEPS, LABEL_TO_STATUS } from './constants';
 import { isoToMinguo, generateMonthList, parseCSVLine, getOperatorName, generateCSV, downloadCSV } from './utils';
+import { logAction, LOG_TYPES } from './logger'; 
 
 // --- 引入拆分出去的元件 ---
 import LoginPage from './components/LoginPage';
@@ -38,10 +37,9 @@ import DebugClearModal from './components/DebugClearModal';
 import ExportModal from './components/ExportModal';
 import GlobalModal from './components/GlobalModal';
 import FormRow from './components/FormRow';
+import LogViewerModal from './components/LogViewerModal'; // ★ 引入日誌視窗
 
 // ★★★ 管理員白名單 ★★★
-// 只有在這個名單內的 Email 登入，才能看到紅色板手
-// 您可以依需求新增，例如: ['admin@school.admin', 'boss@school.admin']
 const ADMIN_EMAILS = [`268${DEFAULT_DOMAIN}`]; 
 
 export default function App() {
@@ -69,6 +67,8 @@ export default function App() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false); 
   const [isDebugClearOpen, setIsDebugClearOpen] = useState(false);
+  const [isLogViewerOpen, setIsLogViewerOpen] = useState(false); // ★ 日誌視窗狀態
+
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [exportMode, setExportMode] = useState('all');
@@ -140,7 +140,7 @@ export default function App() {
 
   // --- 鎖定捲軸 ---
   useEffect(() => {
-    if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen || isDebugClearOpen) {
+    if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen || isDebugClearOpen || isLogViewerOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -148,7 +148,7 @@ export default function App() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isSettingsOpen, isFormOpen, isExportModalOpen, modal.isOpen, isManageModalOpen, isDebugClearOpen]);
+  }, [isSettingsOpen, isFormOpen, isExportModalOpen, modal.isOpen, isManageModalOpen, isDebugClearOpen, isLogViewerOpen]);
 
   // --- 登入相關函式 ---
   const handleLogin = async (username, password) => {
@@ -157,6 +157,7 @@ export default function App() {
       try {
           const email = `${username}${DEFAULT_DOMAIN}`;
           await signInWithEmailAndPassword(auth, email, password);
+          logAction(db, appId, auth.currentUser, LOG_TYPES.LOGIN, `使用者 ${username} 登入成功`);
       } catch (err) {
           console.error(err);
           setAuthError('登入失敗，請檢查帳號密碼');
@@ -170,6 +171,7 @@ export default function App() {
       setAuthError('');
       try {
            await signInAnonymously(auth);
+           logAction(db, appId, auth.currentUser, LOG_TYPES.LOGIN, '訪客登入');
       } catch (err) {
           console.error(err);
           setAuthError('訪客登入失敗');
@@ -180,8 +182,10 @@ export default function App() {
 
   const handleLogout = async () => {
       if (confirm('確定要登出系統嗎？')) {
+          const currentUser = user;
           try {
             await signOut(auth);
+            logAction(db, appId, currentUser, LOG_TYPES.LOGOUT, '使用者登出');
           } catch (err) {
             console.error(err);
             alert('登出失敗');
@@ -209,7 +213,6 @@ export default function App() {
       );
       if (!match) return false;
       
-      // Phase Filtering
       if (filterPhase === 'phase1') return STATUS_STEPS[form.status]?.phase === 1 && form.status !== 'P1_RETURNED';
       if (filterPhase === 'phase2') return (STATUS_STEPS[form.status]?.phase === 2 || form.status === 'P1_RETURNED') && form.status !== 'COMPLETED';
       if (filterPhase === 'phase3') return STATUS_STEPS[form.status]?.phase === 3;
@@ -291,14 +294,10 @@ export default function App() {
     setIsFormOpen(true);
   };
 
-  const handleSaveSettings = async (newData) => {
-  };
-
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return; 
 
-    // 必填檢查
     if (!newUnit || newItems.some(i => !i.subject.trim() || !i.quantity || i.quantity <= 0 || i.unitPrice === '' || i.unitPrice === undefined)) { 
         setModal({ isOpen: true, type: 'alert', alertType: 'danger', title: '資料不完整', message: '請填寫單位、品項名稱、數量及單價' }); 
         return; 
@@ -309,7 +308,6 @@ export default function App() {
     setIsSubmitting(true);
 
     try {
-      // 處理自動新增常用選項
       let updatedProjects = [...projectOptions];
       let projectsChanged = false;
       const trimmedSubsidy = newSubsidy.trim();
@@ -361,8 +359,13 @@ export default function App() {
       };
 
       let dbPromise;
+      let logType = '';
+      let logDetail = '';
+
       if (isEditMode && editingFormId) {
          dbPromise = updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_forms', editingFormId), formData);
+         logType = LOG_TYPES.UPDATE;
+         logDetail = `修改申請單：${previewSerialId} (金額: ${totalAmount})`;
       } else {
          const newSerialId = generateSerialId();
          formData.serialId = newSerialId;
@@ -376,12 +379,16 @@ export default function App() {
          formData.time_P1_RECEIVED = timestamp;
          formData.createdAt = serverTimestamp();
          dbPromise = addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'school_forms'), formData);
+         logType = LOG_TYPES.CREATE;
+         logDetail = `新增申請單：${newSerialId} (金額: ${totalAmount})`;
       }
 
       await Promise.race([
           dbPromise,
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500))
       ]);
+
+      logAction(db, appId, user, logType, logDetail);
 
       if (isEditMode) {
          setIsFormOpen(false); 
@@ -410,42 +417,44 @@ export default function App() {
     }
   };
 
-  // --- 刪除邏輯：單筆順序執行 ---
   const handleDeleteMonth = (monthKey, formsToDelete) => {
      console.log(`[App] 準備刪除月份: ${monthKey}, 筆數: ${formsToDelete.length}`);
      setModal({
-        isOpen: true,
-        type: 'confirm',
-        alertType: 'danger',
-        title: '⚠️ 刪除確認',
-        message: `確定要刪除「${monthKey}」的 ${formsToDelete.length} 筆資料嗎？\n\n(請確認已下載備份，刪除後無法復原)`,
-        onConfirm: async () => {
-            console.log("[App] 開始順序刪除...");
-            try {
-                for (const docData of formsToDelete) {
-                    try {
-                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_forms', docData.id));
-                    } catch (innerErr) {
-                        console.error("Failed to delete doc:", docData.id, innerErr);
-                    }
-                }
+       isOpen: true,
+       type: 'confirm',
+       alertType: 'danger',
+       title: '⚠️ 刪除確認',
+       message: `確定要刪除「${monthKey}」的 ${formsToDelete.length} 筆資料嗎？\n\n(請確認已下載備份，刪除後無法復原)`,
+       onConfirm: async () => {
+           console.log("[App] 開始順序刪除...");
+           try {
+               let deleteCount = 0;
+               for (const docData of formsToDelete) {
+                   try {
+                       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_forms', docData.id));
+                       deleteCount++;
+                   } catch (innerErr) {
+                       console.error("Failed to delete doc:", docData.id, innerErr);
+                   }
+               }
+               console.log("[App] 刪除完成");
+               
+               logAction(db, appId, user, LOG_TYPES.BATCH_DELETE, `批量刪除月份 [${monthKey}]，共刪除 ${deleteCount} 筆資料`);
 
-                console.log("[App] 刪除完成");
-                setTimeout(() => {
+               setTimeout(() => {
                      openAlert('刪除成功', `已刪除 ${monthKey} 的所有選定資料。`);
-                }, 500);
+               }, 500);
 
-            } catch (err) {
-                console.error("Delete process error", err);
-                setTimeout(() => {
-                    openAlert('刪除失敗', '流程發生錯誤，請稍後再試。', 'danger');
-                }, 500);
-            }
-        }
+           } catch (err) {
+               console.error("Delete process error", err);
+               setTimeout(() => {
+                   openAlert('刪除失敗', '流程發生錯誤，請稍後再試。', 'danger');
+               }, 500);
+           }
+       }
      });
   };
 
-  // --- 匯出相關 ---
   const handleExportClick = () => { setIsExportModalOpen(true); };
   const handleCloseExportModal = () => {
       setIsExportModalOpen(false);
@@ -492,6 +501,8 @@ export default function App() {
     const dateRangeStr = exportMode === 'date' 
         ? `${isoToMinguo(exportStartDate).replace(/-/g, '')}-${isoToMinguo(exportEndDate).replace(/-/g, '')}`
         : (exportMode === 'completed' ? '結案存檔' : '全部');
+    
+    logAction(db, appId, user, LOG_TYPES.EXPORT, `匯出報表：模式 [${exportMode}]，區間 [${dateRangeStr}]，共 ${dataToExport.length} 筆`);
 
     const csvContent = generateCSV(dataToExport);
     downloadCSV(csvContent, `申請單報表_${dateRangeStr}.csv`);
@@ -503,7 +514,6 @@ export default function App() {
     setIsManageModalOpen(true);
   };
   
-  // 開啟除錯清理視窗
   const handleDebugClear = () => {
     setIsDebugClearOpen(true);
   };
@@ -518,8 +528,7 @@ export default function App() {
       const rows = rawRows.map(row => parseCSVLine(row));
       
       const header = rows[0];
-      // 修正：使用 includes 確保即使有 BOM 也能抓到欄位
-      const isNewFormat = header && header.some(h => h.includes('品項名稱')) && header.some(h => h.includes('單價'));
+      const isNewFormat = header && header.some(h => h && h.includes('品項名稱')) && header.some(h => h && h.includes('單價'));
       const isSystemExport = header && header[0] && header[0].includes('流水號'); 
       const dataRows = rows.slice(1).filter(r => r.length > 5 && r[0]);
 
@@ -528,11 +537,20 @@ export default function App() {
         return; 
       }
 
-      setModal({ isOpen: true, type: 'confirm', title: '舊檔匯入', message: `偵測到 ${dataRows.length} 筆項目資料，確定要匯入嗎？`, onConfirm: async () => {
+      const existingIds = new Set(forms.map(f => f.serialId));
+      let duplicateCount = 0;
+      dataRows.forEach(row => {
+          if (row[0] && existingIds.has(row[0])) {
+              duplicateCount++;
+          }
+      });
+
+      setModal({ isOpen: true, type: 'confirm', title: '舊檔匯入', 
+        message: `偵測到 ${dataRows.length} 筆資料列。\n\n• 預計更新/覆蓋: ${duplicateCount} 筆\n• 預計新增: 視合併狀況而定\n\n確定要匯入嗎？`, 
+        onConfirm: async () => {
         try {
           const batch = writeBatch(db);
           let count = 0;
-          const currentYear = new Date().getFullYear();
           const formsMap = new Map();
 
           dataRows.forEach((row) => {
@@ -568,7 +586,10 @@ export default function App() {
           });
           formsMap.forEach((formObj) => { batch.set(formObj.docRef, formObj.data); count++; });
           await batch.commit();
-          openAlert('匯入成功', `成功合併並匯入 ${count} 筆申請單。`);
+          
+          logAction(db, appId, user, LOG_TYPES.IMPORT, `CSV 匯入成功：共處理 ${count} 筆申請單資料`);
+
+          openAlert('匯入成功', `成功合併並處理 ${count} 筆申請單。`);
         } catch (err) { openAlert('匯入錯誤', '資料格式有誤或寫入失敗。', 'danger'); }
       }});
     };
@@ -576,14 +597,23 @@ export default function App() {
     e.target.value = '';
   };
 
-  // --- 操作按鈕邏輯 ---
   const openAlert = (title, message, type='info') => setModal({ isOpen: true, type: 'alert', title, message, alertType: type });
   const openConfirm = (title, message, onConfirm) => setModal({ isOpen: true, type: 'confirm', title, message, onConfirm });
-  const closeModal = () => setModal({ ...modal, isOpen: false });
 
   const handleActionClick = (type, form) => {
     if (type === 'edit') handleEditClick(form);
-    else if (type === 'delete') setModal({ isOpen: true, type: 'confirm', title: '確認刪除', message: '確定要刪除這筆紀錄嗎？', onConfirm: () => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_forms', form.id)) });
+    else if (type === 'delete') {
+        setModal({ 
+            isOpen: true, 
+            type: 'confirm', 
+            title: '確認刪除', 
+            message: '確定要刪除這筆紀錄嗎？', 
+            onConfirm: async () => { 
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_forms', form.id));
+                logAction(db, appId, user, LOG_TYPES.DELETE, `刪除申請單：${form.serialId} (${form.applicant})`);
+            } 
+        });
+    }
     else if (type === 'revert') {
        const prevStatusKey = REVERSE_STEPS[form.status];
        if (prevStatusKey) {
@@ -594,6 +624,7 @@ export default function App() {
                 logs: [...(form.logs || []), { status: prevStatusKey, timestamp, note: `退回至：${STATUS_STEPS[prevStatusKey].label} [原因: ${note}]`, operator: getOperatorName(user) }],
                 updatedAt: serverTimestamp()
              });
+             logAction(db, appId, user, LOG_TYPES.STATUS_CHANGE, `退回單號 ${form.serialId} 至 ${STATUS_STEPS[prevStatusKey].label}。原因：${note}`);
          }});
        }
     } else if (type === 'advance') {
@@ -615,6 +646,8 @@ export default function App() {
                     };
                     if (pickupName) updatePayload.receiverName = pickupName;
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_forms', form.id), updatePayload);
+
+                    logAction(db, appId, user, LOG_TYPES.STATUS_CHANGE, `推進單號 ${form.serialId} 至 ${STATUS_STEPS[targetStatus].label}。${note ? '備註:'+note : ''}`);
                  }
              }});
         }
@@ -644,13 +677,16 @@ export default function App() {
       <GlobalModal modal={modal} onClose={() => setModal({ ...modal, isOpen: false })} onConfirm={modal.onConfirm} />
       <ManageCompletedModal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} />
       <DebugClearModal isOpen={isDebugClearOpen} onClose={() => setIsDebugClearOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} />
+      
+      {/* ★ 日誌視窗：放入 DOM 中 */}
+      <LogViewerModal isOpen={isLogViewerOpen} onClose={() => setIsLogViewerOpen(false)} db={db} appId={appId} />
+      
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialData={{ units: unitOptions, projects: projectOptions, vendors: vendorOptions }} onSave={() => {}} db={db} appId={appId} openAlert={openAlert} openConfirm={openConfirm} />
       <ExportModal isOpen={isExportModalOpen} onClose={handleCloseExportModal} onConfirm={handleConfirmExport} mode={exportMode} setMode={setExportMode} startDate={exportStartDate} setStartDate={setExportStartDate} endDate={exportEndDate} setEndDate={setExportEndDate} />
       
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-blue-200">
-            {/* Form Header */}
             <div className="flex justify-between items-center mb-6 pb-4 border-b">
                <h3 className="font-bold text-lg flex items-center gap-2 text-blue-800">
                  {isEditMode ? <Edit2 size={20} /> : <Box size={20} />} 
@@ -663,7 +699,6 @@ export default function App() {
             </div>
             
             <form onSubmit={handleFormSubmit} className="space-y-4">
-              
               <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                 <div className="col-span-12 md:col-span-3">
                   <label className="block text-xs font-bold text-slate-500 mb-1">申請單位 *</label>
@@ -728,11 +763,12 @@ export default function App() {
                           value={item.subject} 
                           onChange={e => handleItemChange(index, 'subject', e.target.value)} 
                           className="w-full p-3 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300" 
+                          required
                         />
                       </div>
 
                       <div className="flex gap-2 w-full md:w-auto">
-                        <div className="w-24 shrink-0">
+                        <div className="w-28 shrink-0">
                            <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">數量</label>
                            <input 
                               type="number" 
@@ -753,7 +789,7 @@ export default function App() {
                               className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none" 
                            />
                         </div>
-                        <div className="flex-1 md:w-32">
+                        <div className="flex-1 md:w-40">
                            <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單價</label>
                            <div className="relative">
                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
@@ -770,18 +806,18 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center justify-between md:justify-end gap-4 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto">
-                         <div className="md:hidden text-sm text-slate-500 font-medium">小計</div>
-                         <div className="text-lg font-bold text-blue-600 w-24 text-right">
-                            ${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}
-                         </div>
-                         <button 
-                            type="button" 
-                            onClick={() => handleRemoveItem(index)} 
-                            className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`}
-                            title="移除此項目"
-                         >
-                            <X size={20} />
-                         </button>
+                          <div className="md:hidden text-sm text-slate-500 font-medium">小計</div>
+                          <div className="text-lg font-bold text-blue-600 w-24 text-right">
+                             ${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}
+                          </div>
+                          <button 
+                             type="button" 
+                             onClick={() => handleRemoveItem(index)} 
+                             className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`}
+                             title="移除此項目"
+                          >
+                             <X size={20} />
+                          </button>
                       </div>
                     </div>
                   ))}
@@ -808,10 +844,19 @@ export default function App() {
             <label className="flex items-center gap-2 bg-slate-50 border px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-100 text-sm font-medium transition-colors h-10">
               <Upload size={16} /> 舊檔匯入 <input type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
             </label>
-            {/* 只讓白名單內的管理員看到紅色板手 */}
+
+            {/* ★ 修改：現在所有人都看得到這個日誌按鈕 */}
+            <button onClick={() => setIsLogViewerOpen(true)} className="flex items-center gap-2 bg-slate-600 text-white px-3 py-2 rounded-lg hover:bg-slate-700 text-sm font-bold transition-colors h-10" title="查看系統日誌">
+              <Activity size={16} /> 日誌
+            </button>
+
+            {/* 管理員專屬工具 (清除測試資料) */}
             {user && ADMIN_EMAILS.includes(user.email) && (
-              <button onClick={handleDebugClear} className="p-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-600 h-10 w-10 flex items-center justify-center" title="清除測試資料"><Wrench size={20} /></button>
+              <button onClick={handleDebugClear} className="p-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-600 h-10 w-10 flex items-center justify-center" title="清除測試資料">
+                <Wrench size={20} />
+              </button>
             )}
+
             <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-white border rounded-lg hover:bg-slate-50 h-10 w-10 flex items-center justify-center"><Settings size={20} /></button>
             <button onClick={handleLogout} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-500 h-10 w-10 flex items-center justify-center" title="登出"><LogOut size={20} /></button>
             <button onClick={handleOpenCreate} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-bold transition-all h-10"><Plus size={18} /> 新增申請單</button>
@@ -851,7 +896,7 @@ export default function App() {
             </div>
             
             {filterPhase === 'phase3' && (
-                 <button onClick={handleManageCompleted} className="flex items-center gap-2 px-5 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 font-bold transition-all h-12 whitespace-nowrap"><FolderCog size={18} /> 管理結案資料</button>
+                  <button onClick={handleManageCompleted} className="flex items-center gap-2 px-5 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700 font-bold transition-all h-12 whitespace-nowrap"><FolderCog size={18} /> 管理結案資料</button>
             )}
             
             <button onClick={handleExportClick} className="flex items-center gap-2 px-5 bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 font-bold transition-all h-12"><Download size={18} /> 匯出</button>
