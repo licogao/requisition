@@ -1,25 +1,21 @@
 import React, { useMemo } from 'react';
 import { Trash2, X, AlertTriangle } from 'lucide-react';
-// 請確保 constants.js 在 src 資料夾中
+// 請確保 src/constants.js 存在
 import { STATUS_STEPS } from '../constants';
 
 const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
     if (!isOpen) return null;
 
+    // 將所有「非結案 (Phase 1 & 2)」的資料按月份分組
     const groupedData = useMemo(() => {
-        // 安全檢查：如果 forms 是空的，直接回傳空陣列
+        // 安全檢查
         if (!forms) return [];
 
         const activeForms = forms.filter(f => {
-            // 防呆：如果 STATUS_STEPS 讀取失敗（undefined），為了不讓程式崩潰，我們先過濾掉所有資料
-            if (!STATUS_STEPS) {
-                console.error("STATUS_STEPS 載入失敗，請檢查 constants.js 路徑");
-                return false;
-            }
-            
+             // 若 STATUS_STEPS 未載入，避免崩潰
+            if (!STATUS_STEPS) return false;
             const step = STATUS_STEPS[f.status];
-            // 邏輯：有定義在流程中 且 Phase 不是 3 (已結案) 才列出
-            // 如果是未定義的狀態 (step 為空)，但狀態字串不是 'COMPLETED'，也視為未結案
+            // 若狀態未定義但非 COMPLETED，視為未結案；若有定義則看 phase
             if (!step) return f.status !== 'COMPLETED';
             return step.phase !== 3; 
         });
@@ -39,6 +35,7 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
             groups[key].items.push(f);
         });
 
+        // 依月份倒序排列
         return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
     }, [forms]);
 
@@ -46,7 +43,7 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
       <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border-4 border-red-500 overflow-hidden">
             
-            {/* Header: 固定在頂部 */}
+            {/* Header */}
             <div className="p-6 border-b flex justify-between items-center bg-red-50 shrink-0 z-10 relative">
               <h3 className="text-xl font-black text-red-700 flex items-center gap-2">
                   <AlertTriangle className="w-6 h-6" />
@@ -55,7 +52,7 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
               <button onClick={onClose}><X className="w-6 h-6 text-slate-400 hover:text-slate-600" /></button>
             </div>
 
-            {/* Warning: 固定在 Header 下方 */}
+            {/* Warning */}
             <div className="p-6 pb-0 shrink-0 bg-white z-10 relative">
                 <div className="bg-red-50 p-4 rounded-lg text-sm text-red-800 border border-red-200 shadow-sm">
                     <p className="font-bold mb-2 flex items-center gap-2">
@@ -69,12 +66,10 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
                 </div>
             </div>
 
-            {/* List: 唯一可捲動區域 */}
+            {/* List */}
             <div className="p-6 overflow-y-auto flex-1 bg-white">
                 {groupedData.length === 0 ? (
-                    <div className="text-center text-slate-400 py-10">
-                        {!STATUS_STEPS ? "系統錯誤：找不到狀態設定檔" : "目前沒有進行中的資料"}
-                    </div>
+                    <div className="text-center text-slate-400 py-10">目前沒有進行中的資料</div>
                 ) : (
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-white z-0">
@@ -104,7 +99,7 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
                 )}
             </div>
             
-            {/* Footer: 固定在底部 */}
+            {/* Footer */}
             <div className="p-4 border-t bg-slate-50 flex justify-end shrink-0">
                 <button onClick={onClose} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg">關閉</button>
             </div>

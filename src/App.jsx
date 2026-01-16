@@ -19,9 +19,8 @@ import {
   enableIndexedDbPersistence,
   writeBatch
 } from 'firebase/firestore';
-// 移除 Wrench, 保留 Box, Settings
 import { 
-  Plus, Search, Calendar, Flame, Filter, Edit2, Upload, Download, LogOut, FileText, Clock, FileDown, FolderCog, ShoppingCart, X, Loader2, Settings, Box 
+  Plus, Search, Calendar, Flame, Filter, Edit2, Upload, Download, LogOut, FileText, Clock, FileDown, FolderCog, ShoppingCart, X, Loader2, Settings, Box, Wrench 
 } from 'lucide-react';
 
 // --- 引入拆分出去的設定與工具 ---
@@ -30,12 +29,12 @@ import { STATUS_STEPS, DEFAULT_UNITS, DEFAULT_PROJECTS, DEFAULT_VENDORS, DEFAULT
 import { isoToMinguo, generateMonthList, parseCSVLine, getOperatorName, generateCSV, downloadCSV } from './utils';
 
 // --- 引入拆分出去的元件 ---
-// 移除 DebugClearModal
 import LoginPage from './components/LoginPage';
 import MinguoDateInput from './components/MinguoDateInput';
 import SearchableSelect from './components/SearchableSelect';
 import SettingsModal from './components/SettingsModal';
 import ManageCompletedModal from './components/ManageCompletedModal';
+import DebugClearModal from './components/DebugClearModal';
 import ExportModal from './components/ExportModal';
 import GlobalModal from './components/GlobalModal';
 import FormRow from './components/FormRow';
@@ -64,7 +63,7 @@ export default function App() {
   const [modal, setModal] = useState({ isOpen: false, type: 'alert', title: '', message: '' });
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false); 
-  // 移除 isDebugClearOpen 狀態
+  const [isDebugClearOpen, setIsDebugClearOpen] = useState(false);
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [exportMode, setExportMode] = useState('all');
@@ -88,6 +87,8 @@ export default function App() {
 
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+
+  const totalAmount = newItems.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)), 0);
 
   // --- 監聽 Auth 狀態 ---
   useEffect(() => {
@@ -134,8 +135,7 @@ export default function App() {
 
   // --- 鎖定捲軸 ---
   useEffect(() => {
-    // 移除 isDebugClearOpen
-    if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen) {
+    if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen || isDebugClearOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -143,7 +143,7 @@ export default function App() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isSettingsOpen, isFormOpen, isExportModalOpen, modal.isOpen, isManageModalOpen]);
+  }, [isSettingsOpen, isFormOpen, isExportModalOpen, modal.isOpen, isManageModalOpen, isDebugClearOpen]);
 
   // --- 登入相關函式 ---
   const handleLogin = async (username, password) => {
@@ -498,6 +498,11 @@ export default function App() {
     setIsManageModalOpen(true);
   };
   
+  const handleDebugClear = () => {
+    setIsDebugClearOpen(true);
+  };
+
+  // --- 修正後的 CSV 匯入邏輯 (強制清除 BOM 與 重複檢查) ---
   const handleImportCSV = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -508,8 +513,11 @@ export default function App() {
       const rows = rawRows.map(row => parseCSVLine(row));
       
       const header = rows[0];
-      const isNewFormat = header && header.some(h => h.includes('品項名稱')) && header.some(h => h.includes('單價'));
-      const isSystemExport = header && header[0] && header[0].includes('流水號'); 
+      // FIX: 移除 BOM 並 trim
+      const cleanHeader = header ? header.map(h => h.replace(/^\uFEFF/, '').trim()) : [];
+
+      const isNewFormat = cleanHeader.some(h => h.includes('品項名稱')) && cleanHeader.some(h => h.includes('單價'));
+      const isSystemExport = cleanHeader[0] && cleanHeader[0].includes('流水號'); 
       const dataRows = rows.slice(1).filter(r => r.length > 5 && r[0]);
 
       if (dataRows.length === 0) { 
@@ -523,10 +531,18 @@ export default function App() {
           let count = 0;
           const currentYear = new Date().getFullYear();
           const formsMap = new Map();
+          
+          // FIX: 建立現有資料的 Set，用於比對重複
+          const existingSerialIds = new Set(forms.map(f => f.serialId));
 
-          dataRows.forEach((row) => {
+          dataRows.forEach((row, index) => {
              if (isNewFormat || isSystemExport) {
+                // --- 新格式/系統匯出處理 ---
                 const serialId = row[0];
+                
+                // FIX: 如果該流水號已存在於資料庫，直接略過 (防止重複匯入)
+                if (existingSerialIds.has(serialId)) return;
+
                 if (!formsMap.has(serialId)) {
                     const statusLabel = row[14];
                     let status = LABEL_TO_STATUS[statusLabel] || 'COMPLETED';
@@ -553,12 +569,62 @@ export default function App() {
                 });
                 formObj.data.totalPrice += itemSubtotal;
                 formObj.data.subject = formObj.data.items.map(i => i.subject).join('、');
+            } else {
+                // --- 舊格式 (Legacy) 處理 ---
+                const vMonth = String(parseInt(row[0])).padStart(2,'0');
+                const vDay = String(parseInt(row[1])).padStart(2,'0');
+                const serialNo = row[6] || (index + 1);
+                const serialId = `(${vMonth}-${vDay}-${serialNo})`;
+
+                // FIX: 舊格式也要檢查重複
+                if (existingSerialIds.has(serialId)) return;
+
+                const appMonthRaw = parseInt(row[3]);
+                const appDayRaw = parseInt(row[4]);
+                const appDateStr = (!isNaN(appMonthRaw) && !isNaN(appDayRaw)) ? `${appMonthRaw}/${appDayRaw}` : '';
+                const unit = (unitOptions && unitOptions.length > 0) ? unitOptions[0] : '未分類';
+                const subject = row[8] || '舊檔匯入';
+                const rawAmount = row[9] || '0';
+                const cleanAmount = parseInt(rawAmount.replace(/[$,]/g, '')) || 0;
+                const vendor = row[11] || '';
+                const remark = row[12];
+                let globalRemark = '';
+                if (remark) globalRemark += `[備註:${remark}]`;
+                
+                let timestamp = new Date().toISOString();
+                if (!isNaN(parseInt(row[0])) && !isNaN(parseInt(row[1]))) {
+                    const recordDate = new Date(currentYear, parseInt(row[0]) - 1, parseInt(row[1]));
+                    if (!isNaN(recordDate.getTime())) timestamp = recordDate.toISOString();
+                }
+
+                const legacyDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'school_forms'));
+                batch.set(legacyDocRef, {
+                    serialId, 
+                    unit: unit, 
+                    applicant: '舊檔資料', 
+                    applicationDate: appDateStr, 
+                    subject: subject, 
+                    totalPrice: cleanAmount, 
+                    status: 'COMPLETED', // 舊檔預設結案 Phase 3
+                    vendor: vendor, 
+                    globalRemark: globalRemark.trim(), 
+                    isUrgent: false, 
+                    logs: [{ status: 'COMPLETED', timestamp: timestamp, note: '舊檔批次匯入存檔' }], 
+                    items: [{ subject: subject, quantity: 1, measureUnit: '批', unitPrice: cleanAmount, subtotal: cleanAmount }], 
+                    createdAt: serverTimestamp(), 
+                    updatedAt: serverTimestamp()
+                });
+                count++;
             }
           });
+          
           formsMap.forEach((formObj) => { batch.set(formObj.docRef, formObj.data); count++; });
           await batch.commit();
-          openAlert('匯入成功', `成功合併並匯入 ${count} 筆申請單。`);
-        } catch (err) { openAlert('匯入錯誤', '資料格式有誤或寫入失敗。', 'danger'); }
+          openAlert('匯入成功', `成功匯入 ${count} 筆新資料 (已自動略過重複)。`);
+        } catch (err) { 
+            console.error(err);
+            openAlert('匯入錯誤', '資料格式有誤或寫入失敗。', 'danger'); 
+        }
       }});
     };
     reader.readAsText(file);
@@ -632,6 +698,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans">
       <GlobalModal modal={modal} onClose={() => setModal({ ...modal, isOpen: false })} onConfirm={modal.onConfirm} />
       <ManageCompletedModal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} />
+      <DebugClearModal isOpen={isDebugClearOpen} onClose={() => setIsDebugClearOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialData={{ units: unitOptions, projects: projectOptions, vendors: vendorOptions }} onSave={() => {}} db={db} appId={appId} openAlert={openAlert} openConfirm={openConfirm} />
       <ExportModal isOpen={isExportModalOpen} onClose={handleCloseExportModal} onConfirm={handleConfirmExport} mode={exportMode} setMode={setExportMode} startDate={exportStartDate} setStartDate={setExportStartDate} endDate={exportEndDate} setEndDate={setExportEndDate} />
       
@@ -703,17 +770,74 @@ export default function App() {
                 <label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><ShoppingCart size={16} /> 購買項目清單</label>
                 <div className="space-y-3">
                   {newItems.map((item, index) => (
-                    <div key={item.id} className="flex flex-wrap md:flex-nowrap gap-2 items-center bg-white p-2 rounded-lg shadow-sm border border-slate-100">
-                      <span className="text-slate-300 text-[10px] w-4">{index+1}</span>
-                      <input type="text" placeholder="品項名稱 *" value={item.subject} onChange={e => handleItemChange(index, 'subject', e.target.value)} className="flex-1 min-w-[150px] p-2 border rounded text-sm h-10 border-slate-200" />
-                      <div className="flex gap-1">
-                        {/* Modified Input: Unit Price (Required field styling) */}
-                        <input type="number" min="1" placeholder="數 *" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className="w-24 p-3 border border-slate-200 rounded text-center text-base h-12 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required />
-                        <input type="text" placeholder="位" value={item.measureUnit} onChange={e => handleItemChange(index, 'measureUnit', e.target.value)} className="w-12 p-2 border rounded text-center text-sm h-10" />
-                        <input type="number" placeholder="單價 *" value={item.unitPrice} onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} className="w-32 p-3 border border-slate-200 rounded text-center text-base h-12 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required />
+                    <div key={item.id} className="group relative flex flex-col md:flex-row gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-blue-300">
+                      <div className="hidden md:flex items-center justify-center w-6 text-slate-400 font-mono text-sm self-center">
+                        {index + 1}.
                       </div>
-                      <div className="text-sm font-bold text-blue-600 w-24 text-right">${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}</div>
-                      <button type="button" onClick={() => handleRemoveItem(index)} className={`p-1.5 text-slate-300 hover:text-red-500 ${newItems.length===1?'invisible':''}`}><X size={20} /></button>
+
+                      <div className="flex-1">
+                        <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">品項名稱</label>
+                        <input 
+                          type="text" 
+                          placeholder="品項名稱 *" 
+                          value={item.subject} 
+                          onChange={e => handleItemChange(index, 'subject', e.target.value)} 
+                          className="w-full p-3 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300" 
+                        />
+                      </div>
+
+                      <div className="flex gap-2 w-full md:w-auto">
+                        <div className="w-24 shrink-0">
+                           <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">數量</label>
+                           <input 
+                              type="number" 
+                              placeholder="數量 *" 
+                              value={item.quantity} 
+                              onChange={e => handleItemChange(index, 'quantity', e.target.value)} 
+                              className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                              required 
+                           />
+                        </div>
+                        <div className="w-20 shrink-0">
+                           <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單位</label>
+                           <input 
+                              type="text" 
+                              placeholder="單位" 
+                              value={item.measureUnit} 
+                              onChange={e => handleItemChange(index, 'measureUnit', e.target.value)} 
+                              className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none" 
+                           />
+                        </div>
+                        <div className="flex-1 md:w-32">
+                           <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單價</label>
+                           <div className="relative">
+                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                             <input 
+                                type="number" 
+                                placeholder="單價 *" 
+                                value={item.unitPrice} 
+                                onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} 
+                                className="w-full pl-6 pr-3 py-3 border border-slate-300 rounded-lg text-right text-base focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                required 
+                             />
+                           </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between md:justify-end gap-4 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto">
+                         <div className="md:hidden text-sm text-slate-500 font-medium">小計</div>
+                         <div className="text-lg font-bold text-blue-600 w-24 text-right">
+                            ${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}
+                         </div>
+                         <button 
+                            type="button" 
+                            onClick={() => handleRemoveItem(index)} 
+                            className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`}
+                            title="移除此項目"
+                         >
+                            <X size={20} />
+                         </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -739,6 +863,7 @@ export default function App() {
             <label className="flex items-center gap-2 bg-slate-50 border px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-100 text-sm font-medium transition-colors h-10">
               <Upload size={16} /> 舊檔匯入 <input type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
             </label>
+            <button onClick={handleDebugClear} className="p-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 text-red-600 h-10 w-10 flex items-center justify-center" title="清除測試資料"><Wrench size={20} /></button>
             <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-white border rounded-lg hover:bg-slate-50 h-10 w-10 flex items-center justify-center"><Settings size={20} /></button>
             <button onClick={handleLogout} className="p-2 bg-white border rounded-lg hover:bg-red-50 text-red-500 h-10 w-10 flex items-center justify-center" title="登出"><LogOut size={20} /></button>
             <button onClick={handleOpenCreate} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 shadow-md font-bold transition-all h-10"><Plus size={18} /> 新增申請單</button>

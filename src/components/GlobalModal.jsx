@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 
 const GlobalModal = ({ modal, onClose, onConfirm }) => {
-    if (!modal.isOpen) return null;
+    // FIX: 增加 (!modal) 的防呆檢查，避免白屏
+    if (!modal || !modal.isOpen) return null;
+    
     const [note, setNote] = useState('');
     const [pickup, setPickup] = useState('');
     const [error, setError] = useState('');
@@ -54,7 +56,7 @@ const GlobalModal = ({ modal, onClose, onConfirm }) => {
     const isDanger = modal.alertType === 'danger';
     
     return (
-      <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onKeyDown={(e) => { if(e.key === 'Escape') onClose(); }}> 
+      <div className="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onKeyDown={(e) => { if(e.key === 'Escape') onClose(); }}> 
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200 border-t-4 border-blue-600" style={{borderColor: isDanger ? '#ef4444' : '#2563eb'}}>
           <div className="text-center mb-4"><h3 className={`text-xl font-bold ${isDanger ? 'text-red-600' : 'text-slate-800'}`}>{String(modal.title)}</h3>
           <p className="text-slate-600 mt-2 text-sm break-all whitespace-pre-wrap">{String(modal.message)}</p>

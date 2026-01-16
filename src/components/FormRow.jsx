@@ -56,7 +56,20 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction }) => {
                      {form.vendor && <div className="flex justify-between border-b border-dashed py-1"><span>廠商</span><span className="font-medium text-green-600">{String(form.vendor)}</span></div>}
                      {form.receiverName && <div className="flex justify-between border-b border-dashed py-1"><span>領回人</span><span className="font-medium text-purple-600">{String(form.receiverName)}</span></div>}
                      {form.globalRemark && <div className="bg-yellow-50 p-2 rounded text-xs mt-2 border border-yellow-100"><span className="font-bold text-yellow-800">全域備註：</span>{String(form.globalRemark)}</div>}
-                     <div className="mt-4"><p className="text-xs text-slate-400 mb-2">品項清單：</p><div className="bg-slate-50 rounded p-2 space-y-1">{form.items?.map((item, idx) => (<div key={idx} className="flex justify-between text-xs border-b border-slate-200 last:border-0 pb-1"><span>{idx+1}. {String(item.subject)}</span><span>{item.quantity}{item.measureUnit}x${item.unitPrice}</span></div>))}</div></div>
+                     
+                     {/* 修正：加入 break-all 與 whitespace-normal 防止破圖 */}
+                     <div className="mt-4">
+                        <p className="text-xs text-slate-400 mb-2">品項清單：</p>
+                        <div className="bg-slate-50 rounded p-2 space-y-1">
+                            {form.items?.map((item, idx) => (
+                                <div key={idx} className="flex justify-between text-xs border-b border-slate-200 last:border-0 pb-1">
+                                    <span className="break-all whitespace-normal pr-2">{idx+1}. {String(item.subject)}</span>
+                                    <span className="shrink-0">{item.quantity}{item.measureUnit} x ${item.unitPrice}</span>
+                                </div>
+                            ))}
+                        </div>
+                     </div>
+
                      <div className="flex justify-between py-1 mt-2 pt-2 border-t"><span className="font-bold">總金額</span><span className="font-bold text-blue-600 text-lg">${(form.totalPrice || 0).toLocaleString()}</span></div>
                    </div>
                  </div>

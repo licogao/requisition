@@ -17,7 +17,6 @@ export const minguoToIso = (minguoStr) => {
     const d = cleanStr.substring(yLen + 2);
     return `${y}-${m}-${d}`;
   }
-  // 處理 114/01/01 或 114-01-01
   const parts = minguoStr.split(/[-/.]/);
   if (parts.length === 3) {
       const y = parseInt(parts[0]) + 1911;
@@ -97,6 +96,12 @@ export const generateCSV = (dataToExport) => {
     const headers = ['流水號', '原申請單日期', '是否速件', '申請日期', '申請單位', '申請人', '計畫補助', '廠商', '品項名稱', '數量', '單位', '單價', '小計', '領回人', '目前狀態', '目前狀態時間', '備註'];
     let csvRows = [];
     
+    // Helper to escape CSV fields
+    const escape = (val) => {
+        if (val === null || val === undefined) return '""';
+        return `"${String(val).replace(/"/g, '""')}"`;
+    };
+
     dataToExport.forEach(f => {
       const dateStr = f.createdAt?.toDate ? toMinguoDate(f.createdAt.toDate()) : '-';
       const appDateStr = isoToMinguo(f.applicationDate);
@@ -105,7 +110,7 @@ export const generateCSV = (dataToExport) => {
       
       if (f.items && f.items.length > 0) {
           f.items.forEach(item => {
-              csvRows.push([
+              const row = [
                 f.serialId, 
                 appDateStr, 
                 f.isUrgent?'是':'否', 
@@ -123,10 +128,12 @@ export const generateCSV = (dataToExport) => {
                 statusStr,
                 statusTimeStr,
                 f.globalRemark || ''
-              ].map(v => `"${String(v||'').replace(/"/g, '""')}"`).join(','));
+              ].map(escape).join(',');
+              csvRows.push(row);
           });
       } else {
-          csvRows.push([
+          // Fallback for empty items
+          const row = [
             f.serialId, 
             appDateStr, 
             f.isUrgent?'是':'否', 
@@ -141,11 +148,12 @@ export const generateCSV = (dataToExport) => {
             statusStr,
             statusTimeStr,
             f.globalRemark || ''
-          ].map(v => `"${String(v||'').replace(/"/g, '""')}"`).join(','));
+          ].map(escape).join(',');
+          csvRows.push(row);
       }
     });
     
-    return '\uFEFF' + [headers.join(','), ...csvRows].join('\n');
+    return '\uFEFF' + [headers.map(escape).join(','), ...csvRows].join('\n');
 };
 
 export const downloadCSV = (content, filename) => {
