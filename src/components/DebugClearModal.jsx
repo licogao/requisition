@@ -1,21 +1,15 @@
 import React, { useMemo } from 'react';
 import { Trash2, X, AlertTriangle } from 'lucide-react';
-// 請確保 src/constants.js 存在
 import { STATUS_STEPS } from '../constants';
 
 const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
     if (!isOpen) return null;
-
-    // 將所有「非結案 (Phase 1 & 2)」的資料按月份分組
     const groupedData = useMemo(() => {
-        // 安全檢查
         if (!forms) return [];
 
         const activeForms = forms.filter(f => {
-             // 若 STATUS_STEPS 未載入，避免崩潰
             if (!STATUS_STEPS) return false;
             const step = STATUS_STEPS[f.status];
-            // 若狀態未定義但非 COMPLETED，視為未結案；若有定義則看 phase
             if (!step) return f.status !== 'COMPLETED';
             return step.phase !== 3; 
         });

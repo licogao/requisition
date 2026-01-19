@@ -1,8 +1,7 @@
 import { STATUS_STEPS } from './constants';
 
-// ... (上方原有的日期處理、CSV解析函式保持不變，不用動) ...
 /**
- * 將 ISO 日期字串 (2023-12-25) 轉為民國格式 (112-12/25)
+ * ISO 日期轉民國 (2023-12-25 -> 112-12/25)
  */
 export const isoToMinguo = (isoDateStr) => {
   if (!isoDateStr) return '';
@@ -12,7 +11,7 @@ export const isoToMinguo = (isoDateStr) => {
 };
 
 /**
- * 將民國字串 (1120101 或 112-01-01) 轉回 ISO 格式
+ * 民國日期轉 ISO
  */
 export const minguoToIso = (minguoStr) => {
   if (!minguoStr) return '';
@@ -37,7 +36,7 @@ export const minguoToIso = (minguoStr) => {
 };
 
 /**
- * 格式化完整的日期時間 (YYYY/MM/DD HH:mm)
+ * 格式化完整日期時間
  */
 export const formatDate = (isoString) => {
   if (!isoString) return '-';
@@ -54,7 +53,7 @@ export const formatDate = (isoString) => {
 };
 
 /**
- * Date 物件轉民國日期 (YYYY/MM/DD)
+ * Date 物件轉民國日期
  */
 export const toMinguoDate = (dateObj) => {
   if (!dateObj || isNaN(dateObj.getTime())) return '-';
@@ -65,7 +64,7 @@ export const toMinguoDate = (dateObj) => {
 };
 
 /**
- * 產生月份篩選清單 (最近 12 個月)
+ * 產生月份清單
  */
 export const generateMonthList = () => {
   const months = [];
@@ -74,14 +73,13 @@ export const generateMonthList = () => {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = `${d.getFullYear() - 1911}年${d.getMonth() + 1}月`;
-    const labelFull = `${d.getFullYear() - 1911}/${String(d.getMonth() + 1).padStart(2, '0')}`;
     months.push({ value, label });
   }
   return months.reverse();
 };
 
 /**
- * 解析 CSV 單行資料 (包含處理引號與 BOM)
+ * 解析 CSV 單行 (含 BOM 處理)
  */
 export const parseCSVLine = (line) => {
   const cleanLine = line.replace(/^\uFEFF/, '');
@@ -121,7 +119,7 @@ export const getOperatorName = (user) => {
 };
 
 /**
- * 產生 CSV 內容字串 (給人類閱讀的報表)
+ * 產生 CSV 內容
  */
 export const generateCSV = (dataToExport) => {
     const headers = ['流水號', '原申請單日期', '是否速件', '申請日期', '申請單位', '申請人', '計畫補助', '廠商', '品項名稱', '數量', '單位', '單價', '小計', '領回人', '目前狀態', '目前狀態時間', '備註'];
@@ -141,42 +139,17 @@ export const generateCSV = (dataToExport) => {
       if (f.items && f.items.length > 0) {
           f.items.forEach(item => {
               const row = [
-                f.serialId, 
-                appDateStr, 
-                f.isUrgent?'是':'否', 
-                dateStr, 
-                f.unit, 
-                f.applicant, 
-                f.subsidy, 
-                f.vendor || '', 
-                item.subject, 
-                item.quantity,
-                item.measureUnit,
-                item.unitPrice,
-                item.subtotal,
-                f.receiverName||'', 
-                statusStr,
-                statusTimeStr,
-                f.globalRemark || ''
+                f.serialId, appDateStr, f.isUrgent?'是':'否', dateStr, f.unit, f.applicant, f.subsidy, f.vendor || '', 
+                item.subject, item.quantity, item.measureUnit, item.unitPrice, item.subtotal, 
+                f.receiverName||'', statusStr, statusTimeStr, f.globalRemark || ''
               ].map(escape).join(',');
               csvRows.push(row);
           });
       } else {
           const row = [
-            f.serialId, 
-            appDateStr, 
-            f.isUrgent?'是':'否', 
-            dateStr, 
-            f.unit, 
-            f.applicant, 
-            f.subsidy, 
-            f.vendor || '', 
-            f.subject, 
-            '1', '式', f.totalPrice, f.totalPrice,
-            f.receiverName||'', 
-            statusStr,
-            statusTimeStr,
-            f.globalRemark || ''
+            f.serialId, appDateStr, f.isUrgent?'是':'否', dateStr, f.unit, f.applicant, f.subsidy, f.vendor || '', 
+            f.subject, '1', '式', f.totalPrice, f.totalPrice, 
+            f.receiverName||'', statusStr, statusTimeStr, f.globalRemark || ''
           ].map(escape).join(',');
           csvRows.push(row);
       }
@@ -186,7 +159,7 @@ export const generateCSV = (dataToExport) => {
 };
 
 /**
- * 觸發瀏覽器下載 CSV
+ * 下載 CSV 檔案
  */
 export const downloadCSV = (content, filename) => {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
@@ -197,14 +170,16 @@ export const downloadCSV = (content, filename) => {
     link.click();
 };
 
-// ==========================================
-// ★ 新增功能：完整備份與還原 (JSON 格式)
-// ==========================================
-
+/**
+ * 產生 JSON 備份內容
+ */
 export const generateBackupJSON = (dataToExport) => {
     return JSON.stringify(dataToExport, null, 2);
 };
 
+/**
+ * 下載 JSON 檔案
+ */
 export const downloadJSON = (content, filename) => {
     const blob = new Blob([content], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -215,55 +190,31 @@ export const downloadJSON = (content, filename) => {
 };
 
 /**
- * [匯入處理] 智慧合併邏輯 (修正版)
- * 修正重點：將欄位名稱 'history' 改回系統標準的 'logs'，確保 UI 能正確顯示。
+ * JSON 匯入與歷程合併邏輯
  */
 export const processBackupImport = (currentDBData, importedFileData) => {
     const currentDataMap = new Map(currentDBData.map(item => [item.id, item]));
     const mergedResults = [];
-    
-    // 使用 ISO String 以符合 App.js 裡的 logs 格式
     const timestampStr = new Date().toISOString(); 
 
     importedFileData.forEach(importItem => {
-        // 準備新的歷程紀錄 (Log)
-        // ★ 關鍵修正：這裡的欄位名稱必須跟 App.js 裡的一模一樣 (status, timestamp, note, operator)
         const importLogRecord = {
             status: importItem.status, 
             timestamp: timestampStr, 
-            note: "系統批次匯入 (還原)", // 這是您想看的那一行
+            note: "系統批次匯入 (還原)",
             operator: "系統"
         };
 
-        // 檢查是否已存在
         if (currentDataMap.has(importItem.id)) {
-            // ★ 修正：讀取 'logs' 而不是 'history'
-            const newLogs = [
-                ...(importItem.logs || []), // 保留 JSON 檔裡的舊 logs
-                importLogRecord // 加上新的一行
-            ];
-
-            mergedResults.push({
-                ...importItem,
-                logs: newLogs // ★ 修正：寫入 'logs'
-            });
-
+            const newLogs = [...(importItem.logs || []), importLogRecord];
+            mergedResults.push({ ...importItem, logs: newLogs });
             currentDataMap.delete(importItem.id);
         } else {
-            // 全新資料
-            const newLogs = [
-                ...(importItem.logs || []),
-                importLogRecord
-            ];
-
-            mergedResults.push({
-                ...importItem,
-                logs: newLogs
-            });
+            const newLogs = [...(importItem.logs || []), importLogRecord];
+            mergedResults.push({ ...importItem, logs: newLogs });
         }
     });
 
-    // 保留公司有、但匯入檔沒有的資料
     currentDataMap.forEach(existingItem => {
         mergedResults.push(existingItem);
     });

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 
 const GlobalModal = ({ modal, onClose, onConfirm }) => {
-    // FIX: 增加 (!modal) 的防呆檢查，避免白屏
     if (!modal || !modal.isOpen) return null;
     
     const [note, setNote] = useState('');

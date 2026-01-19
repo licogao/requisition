@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  collection, addDoc, updateDoc, doc, query, deleteDoc, setDoc, writeBatch, getDocs, where, serverTimestamp 
+  collection, addDoc, updateDoc, doc, query, deleteDoc, setDoc, writeBatch, getDocs, where, serverTimestamp, limit, orderBy 
 } from 'firebase/firestore'; 
 import { 
   Plus, Search, Calendar, Flame, Filter, Edit2, Upload, Download, LogOut, FileText, Clock, FolderCog, ShoppingCart, X, Loader2, Settings, Box, Wrench, Activity, FileJson, FileSpreadsheet, Cloud 
@@ -8,14 +8,11 @@ import {
 
 import { db, appId } from './firebase'; 
 import { STATUS_STEPS, DEFAULT_DOMAIN, REVERSE_STEPS } from './constants';
-import { isoToMinguo, generateMonthList, parseCSVLine, getOperatorName, generateCSV, downloadCSV, generateBackupJSON, downloadJSON, processBackupImport } from './utils';
+import { isoToMinguo, generateMonthList, getOperatorName, generateCSV, downloadCSV, generateBackupJSON, downloadJSON, processBackupImport } from './utils';
 import { logAction, LOG_TYPES } from './logger'; 
-
-// ★ 引入剛剛拆分出去的 Hooks
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './hooks/useSettings';
 import { useForms } from './hooks/useForms';
-
 import LoginPage from './components/LoginPage';
 import MinguoDateInput from './components/MinguoDateInput';
 import SearchableSelect from './components/SearchableSelect';
@@ -31,20 +28,19 @@ import LogViewerModal from './components/LogViewerModal';
 const ADMIN_EMAILS = [`268${DEFAULT_DOMAIN}`]; 
 
 export default function App() {
-  // ★★★ 修正：將 Hook 回傳的函式重新命名(Alias)為舊名稱，以配合下方的 JSX ★★★
   const { 
     user, 
     loading: authLoading, 
     error: authError, 
-    login: handleLogin,             // login -> handleLogin
-    loginAnonymous: handleAnonymousLogin, // loginAnonymous -> handleAnonymousLogin
-    logout: handleLogout            // logout -> handleLogout
+    login: handleLogin,             
+    loginAnonymous: handleAnonymousLogin, 
+    logout: handleLogout            
   } = useAuth();
 
   const { unitOptions, projectOptions, vendorOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
-  // --- UI 狀態 (這些屬於畫面控制，保留在 App.js 是合理的) ---
+  // --- UI 狀態 ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [monthTabs] = useState(generateMonthList());
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,7 +90,7 @@ export default function App() {
 
   const totalAmount = newItems.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)), 0);
 
-  // 鎖定捲軸 Effect (UI 行為)
+  // 鎖定捲軸 Effect
   useEffect(() => {
     if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen || isDebugClearOpen || isLogViewerOpen || showExportFormatSelect) {
       document.body.style.overflow = 'hidden';
@@ -104,7 +100,7 @@ export default function App() {
     return () => { document.body.style.overflow = ''; };
   }, [isSettingsOpen, isFormOpen, isExportModalOpen, modal.isOpen, isManageModalOpen, isDebugClearOpen, isLogViewerOpen, showExportFormatSelect]);
 
-  // --- 業務邏輯 (可保留或進一步拆分，目前保持原樣) ---
+  // --- 業務邏輯 ---
 
   const handleCloudSearch = async () => {
     if (!searchTerm.trim()) {

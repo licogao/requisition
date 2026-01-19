@@ -8,7 +8,7 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
   const [newItem, setNewItem] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   
-  // ★ 新增：編輯狀態
+  // 編輯狀態
   const [editingIndex, setEditingIndex] = useState(null);
   const [editValue, setEditValue] = useState('');
 
@@ -46,19 +46,19 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
     }));
   };
 
-  // ★ 新增：開始編輯
+  // 開始編輯
   const startEdit = (index, value) => {
     setEditingIndex(index);
     setEditValue(value);
   };
 
-  // ★ 新增：取消編輯
+  // 取消編輯
   const cancelEdit = () => {
     setEditingIndex(null);
     setEditValue('');
   };
 
-  // ★ 新增：儲存編輯
+  // 儲存編輯
   const saveEdit = (index) => {
     if (!editValue.trim()) return;
     
@@ -107,7 +107,6 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
         
-        {/* Header */}
         <div className="p-4 md:p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl shrink-0">
           <div>
             <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -120,7 +119,6 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
           </button>
         </div>
 
-        {/* Tabs - 手機版優化：可橫向捲動 */}
         <div className="flex border-b border-slate-200 overflow-x-auto shrink-0 no-scrollbar">
           {tabs.map(tab => (
             <button
@@ -138,10 +136,7 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
           ))}
         </div>
 
-        {/* Content Body */}
         <div className="flex-1 overflow-hidden flex flex-col p-4 md:p-6">
-          
-          {/* 輸入區 - 手機版優化：上下排列 */}
           <div className="flex flex-col sm:flex-row gap-2 mb-4 shrink-0">
             <input 
               type="text" 
@@ -160,7 +155,6 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
             </button>
           </div>
 
-          {/* 列表區 - 響應式高度與間距 */}
           <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-2">
             {localData[activeTab]?.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 min-h-[200px]">
@@ -216,7 +210,6 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-3 shrink-0">
           <button 
             onClick={onClose} 

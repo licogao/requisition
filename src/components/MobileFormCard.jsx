@@ -1,15 +1,12 @@
 import React from 'react';
 import { 
-  ChevronDown, ChevronUp, Clock, User, Building, FileText, CheckCircle, AlertCircle, PlayCircle, XCircle, ArrowRight
+  ChevronDown, ChevronUp, Clock, User, Building, PlayCircle, CheckCircle, AlertCircle, ArrowRight, XCircle, RotateCcw 
 } from 'lucide-react';
-import { STATUS_STEPS } from '../constants';
 
-// 手機版專用的卡片元件
-const MobileFormCard = ({ form, expandedId, setExpandedId, onAction }) => {
+const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps }) => {
   const isExpanded = expandedId === form.id;
-  const statusConfig = STATUS_STEPS[form.status] || {};
+  const statusConfig = statusSteps?.[form.status] || {};
   
-  // 狀態顏色對應
   const getStatusColor = (phase) => {
     if (phase === 1) return 'bg-blue-100 text-blue-700 border-blue-200';
     if (phase === 2) return 'bg-orange-100 text-orange-700 border-orange-200';
@@ -24,15 +21,30 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction }) => {
     return <AlertCircle size={16} />;
   };
 
+  // 時間格式化小工具
+  const formatLocalTime = (isoString) => {
+    if (!isoString) return '-';
+    try {
+      return new Date(isoString).toLocaleString('zh-TW', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } catch (e) {
+      return '-';
+    }
+  };
+
   return (
     <div className={`bg-white rounded-xl border shadow-sm transition-all duration-200 ${isExpanded ? 'border-blue-400 ring-1 ring-blue-100' : 'border-slate-200'}`}>
-      {/* 卡片頭部 (Header) - 永遠顯示 */}
       <div 
         className="p-4 cursor-pointer"
         onClick={() => setExpandedId(isExpanded ? null : form.id)}
       >
         <div className="flex justify-between items-start gap-3">
-          {/* 左側：主要資訊 */}
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
@@ -62,7 +74,6 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction }) => {
             </div>
           </div>
 
-          {/* 右側：金額與展開鈕 */}
           <div className="flex flex-col items-end gap-3">
             <div className="text-right">
               <div className="text-xs text-slate-400">總金額</div>
@@ -75,10 +86,8 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction }) => {
         </div>
       </div>
 
-      {/* 卡片展開內容 (Body) */}
       {isExpanded && (
         <div className="px-4 pb-4 pt-0 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200">
-          {/* 詳細資訊區塊 */}
           <div className="py-3 space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
               <div>
@@ -105,14 +114,13 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction }) => {
               </div>
             )}
 
-            {/* 歷程紀錄 (簡化版) */}
             <div className="mt-4">
               <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">最近歷程</h4>
               <div className="space-y-2 relative pl-2 border-l-2 border-slate-200 ml-1">
-                {(form.logs || []).slice().reverse().slice(0, 3).map((log, idx) => ( // 只顯示最近 3 筆
+                {(form.logs || []).slice().reverse().slice(0, 3).map((log, idx) => (
                   <div key={idx} className="pl-3 relative">
                     <div className="absolute -left-[13px] top-1.5 w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-400"></div>
-                    <div className="text-xs text-slate-400">{log.timestamp ? log.timestamp.slice(0,16).replace('T', ' ') : '-'}</div>
+                    <div className="text-xs text-slate-400">{formatLocalTime(log.timestamp)}</div>
                     <div className="text-sm font-medium text-slate-700">{log.note || log.status}</div>
                     <div className="text-xs text-slate-500">操作: {log.operator}</div>
                   </div>
@@ -121,11 +129,10 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction }) => {
             </div>
           </div>
 
-          {/* 操作按鈕區 */}
-          <div className="flex gap-2 mt-2 pt-3 border-t border-slate-100 overflow-x-auto pb-1">
+          <div className="flex gap-2 mt-2 pt-3 border-t border-slate-100 overflow-x-auto pb-1 no-scrollbar">
             <button 
               onClick={() => onAction('edit', form)}
-              className="flex-1 min-w-[80px] py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-bold active:bg-slate-100"
+              className="flex-1 min-w-[80px] py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-bold active:bg-slate-100 flex items-center justify-center gap-1"
             >
               修改
             </button>
@@ -135,16 +142,17 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction }) => {
                 onClick={() => onAction('advance', form)}
                 className="flex-[2] min-w-[120px] py-2 bg-blue-600 text-white rounded-lg text-sm font-bold shadow-sm active:bg-blue-700 flex items-center justify-center gap-1"
               >
-                {statusConfig.nextAction} <ArrowRight size={14} />
+                {statusConfig.nextAction} <ArrowRight size={16} />
               </button>
             )}
 
-            {STATUS_STEPS[form.status]?.phase > 1 && (
+            {/* 退回按鈕 - 確保使用 statusConfig 判斷 */}
+            {statusConfig.phase > 1 && (
                <button 
                  onClick={() => onAction('revert', form)}
-                 className="flex-1 min-w-[80px] py-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg text-sm font-bold active:bg-orange-100"
+                 className="flex-1 min-w-[80px] py-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg text-sm font-bold active:bg-orange-100 flex items-center justify-center gap-1"
                >
-                 退回
+                 <RotateCcw size={16} /> 退回
                </button>
             )}
 
