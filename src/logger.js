@@ -1,50 +1,61 @@
-// src/logger.js
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { getOperatorName } from './utils'; // 複用你現有的工具來取得人名
+import { addDoc, collection } from 'firebase/firestore';
 
-// 定義動作類型常數 (方便統一管理，避免打錯字)
+// 定義日誌類型常數 (對應前端 LogViewerModal 的圖示設定)
 export const LOG_TYPES = {
-  LOGIN: '登入',
-  LOGOUT: '登出',
-  CREATE: '新增',
-  UPDATE: '修改',
-  DELETE: '刪除',
-  STATUS_CHANGE: '狀態更新',
-  EXPORT: '匯出',
-  IMPORT: '匯入',
-  BATCH_DELETE: '批量刪除'
+  LOGIN: 'LOGIN',
+  LOGOUT: 'LOGOUT',
+  CREATE: 'CREATE',
+  UPDATE: 'UPDATE',
+  DELETE: 'DELETE',
+  STATUS_CHANGE: 'STATUS_CHANGE',
+  EXPORT: 'EXPORT',
+  IMPORT: 'IMPORT',
+  BATCH_DELETE: 'BATCH_DELETE'
+};
+
+/**
+ * 取得操作人員顯示名稱 (內建於 logger 以減少依賴)
+ */
+const getLoggerOperatorName = (user) => {
+    if (!user) return '未知用戶';
+    if (user.isAnonymous) return '訪客';
+    if (user.email) return user.email.split('@')[0];
+    return '管理員';
 };
 
 /**
  * 系統日誌記錄函式
  * @param {Object} db - Firestore 實例
  * @param {string} appId - 專案 ID
- * @param {Object} user - Firebase User 物件 (用來抓是誰操作)
- * @param {string} type - 動作類型 (建議使用 LOG_TYPES)
- * @param {string} details - 詳細內容 (例如：流水號、修改了什麼)
+ * @param {Object} user - Firebase User 物件
+ * @param {string} action - 動作類型 (請使用 LOG_TYPES)
+ * @param {string} detail - 詳細內容
  */
-export const logAction = async (db, appId, user, type, details) => {
-  // 如果沒有 user (例如尚未登入的錯誤)，視情況處理，這裡預設不記錄或記為未知
-  if (!user && type !== LOG_TYPES.LOGIN) return;
+export const logAction = async (db, appId, user, action, detail) => {
+  // 如果沒有 user (例如尚未登入的錯誤)，視情況處理
+  if (!db || !appId) return;
 
   try {
-    const operator = getOperatorName(user);
+    const operator = getLoggerOperatorName(user);
     
-    // 寫入到 system_logs 集合 (與 school_forms 同層級)
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'system_logs'), {
-      timestamp: serverTimestamp(), // 伺服器時間
-      operator: operator,           // 操作者名稱
-      uid: user?.uid || 'guest',    // 操作者 UID (方便追蹤唯一性)
-      type: type,                   // 動作類型
-      details: details,             // 動作描述
-      userAgent: navigator.userAgent // (選填) 記錄是手機還是電腦，除錯好用
-    });
+    // 準備寫入的資料物件
+    const logData = {
+      action: action || 'DEFAULT', // 對應 LogViewerModal 的 TYPE_CONFIG
+      detail: detail || '',        // 詳細說明
+      user: operator,              // 操作者名稱
+      uid: user?.uid || 'guest',   // 操作者 UID
+      timestamp: new Date().toISOString(), // 使用 ISO 字串，確保前端顯示時間不會出錯
+      userAgent: navigator.userAgent       // 除錯用資訊
+    };
+
+    // ★★★ 關鍵修正：寫入到 'public/data/logs'，這是新版日誌視窗讀取的位置 ★★★
+    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), logData);
     
-    // 開發模式下可以在 Console 顯示，方便你看
-    console.log(`[System Log] ${operator} | ${type} | ${details}`);
+    // 開發模式下可以在 Console 顯示，方便 debug
+    console.log(`[System Log] ${operator} | ${action} | ${detail}`);
     
   } catch (error) {
-    // 日誌記錄失敗不應該卡死主程式，所以我們只印出錯誤，不 throw error
+    // 日誌記錄失敗不應該卡死主程式，只印出錯誤
     console.error("日誌寫入失敗:", error);
   }
 };

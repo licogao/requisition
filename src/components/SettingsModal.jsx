@@ -1,174 +1,241 @@
-import React, { useState } from 'react';
-import { Settings, X, Building, Landmark, Store, ArrowDownAZ, Plus, Check, Trash2, Pencil, ChevronUp, ChevronRight as ChevronRightIcon } from 'lucide-react';
-import { doc, setDoc } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { X, Plus, Trash2, Save, Settings, Layers, Briefcase, Users, AlertCircle, Edit2, Check } from 'lucide-react'; // ★ 新增 Edit2, Check
+import { doc, updateDoc } from 'firebase/firestore';
 
-const SettingsSection = ({ title, icon, data, fieldName, colSpan, db, appId, onUpdate, openAlert, openConfirm }) => {
-    const [inputValue, setInputValue] = useState('');
-    const [editState, setEditState] = useState({ index: null, value: '' });
+const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAlert, openConfirm }) => {
+  const [activeTab, setActiveTab] = useState('units');
+  const [localData, setLocalData] = useState({ units: [], projects: [], vendors: [] });
+  const [newItem, setNewItem] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // ★ 新增：編輯狀態
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editValue, setEditValue] = useState('');
 
-    const updateDB = async (newData) => {
-        try {
-            const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'school_settings', 'config1');
-            await setDoc(settingsRef, { [fieldName]: newData }, { merge: true });
-            if (onUpdate) onUpdate(fieldName, newData);
-        } catch (err) {
-            openAlert('錯誤', `操作失敗: ${err.message}`, 'danger');
-        }
-    };
+  useEffect(() => {
+    if (isOpen && initialData) {
+      setLocalData(initialData);
+    }
+  }, [isOpen, initialData]);
 
-    const handleAdd = async () => {
-        const val = inputValue.trim();
-        if (!val) return;
-        if (data.includes(val)) {
-            openAlert('提示', '此項目已存在！');
-            return;
-        }
+  if (!isOpen) return null;
+
+  const tabs = [
+    { id: 'units', label: '申請單位', icon: <Layers size={18} /> },
+    { id: 'projects', label: '計畫來源', icon: <Briefcase size={18} /> },
+    { id: 'vendors', label: '常用廠商', icon: <Users size={18} /> },
+  ];
+
+  const handleAddItem = () => {
+    if (!newItem.trim()) return;
+    if (localData[activeTab].includes(newItem.trim())) {
+      openAlert('重複項目', '該項目已存在清單中。', 'warning');
+      return;
+    }
+    setLocalData(prev => ({
+      ...prev,
+      [activeTab]: [...prev[activeTab], newItem.trim()]
+    }));
+    setNewItem('');
+  };
+
+  const handleDeleteItem = (itemToDelete) => {
+    setLocalData(prev => ({
+      ...prev,
+      [activeTab]: prev[activeTab].filter(item => item !== itemToDelete)
+    }));
+  };
+
+  // ★ 新增：開始編輯
+  const startEdit = (index, value) => {
+    setEditingIndex(index);
+    setEditValue(value);
+  };
+
+  // ★ 新增：取消編輯
+  const cancelEdit = () => {
+    setEditingIndex(null);
+    setEditValue('');
+  };
+
+  // ★ 新增：儲存編輯
+  const saveEdit = (index) => {
+    if (!editValue.trim()) return;
+    
+    // 檢查是否有變更
+    const originalValue = localData[activeTab][index];
+    if (editValue.trim() === originalValue) {
+        cancelEdit();
+        return;
+    }
+
+    // 檢查是否重複 (排除自己)
+    const otherItems = localData[activeTab].filter((_, i) => i !== index);
+    if (otherItems.includes(editValue.trim())) {
+        openAlert('重複項目', '該名稱已存在。', 'warning');
+        return;
+    }
+
+    setLocalData(prev => {
+        const newList = [...prev[activeTab]];
+        newList[index] = editValue.trim();
+        return {
+            ...prev,
+            [activeTab]: newList
+        };
+    });
+    cancelEdit();
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'school_settings', 'config1');
+      await updateDoc(settingsRef, localData);
+      onSave(localData);
+      openAlert('儲存成功', '設定已更新。');
+      onClose();
+    } catch (error) {
+      console.error("Save settings error:", error);
+      openAlert('儲存失敗', '無法更新設定，請檢查網路。', 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
         
-        const newData = [val, ...data];
-        await updateDB(newData);
-        setInputValue(''); 
-    };
-
-    const handleRemove = async (index) => {
-        openConfirm('確認刪除', `確定要刪除「${data[index]}」嗎？`, async () => {
-            const newData = [...data];
-            newData.splice(index, 1);
-            await updateDB(newData);
-        });
-    };
-
-    const handleSaveEdit = async () => {
-        const val = editState.value.trim();
-        if (!val) return;
-        
-        const newData = [...data];
-        newData[editState.index] = val;
-        
-        await updateDB(newData);
-        setEditState({ index: null, value: '' });
-    };
-
-    const handleMove = async (index, direction) => {
-        const newData = [...data];
-        if (direction === 'up' && index > 0) {
-            [newData[index], newData[index - 1]] = [newData[index - 1], newData[index]];
-        } else if (direction === 'down' && index < newData.length - 1) {
-            [newData[index], newData[index + 1]] = [newData[index + 1], newData[index]];
-        } else {
-            return;
-        }
-        await updateDB(newData);
-    };
-
-    const handleAutoSort = () => {
-        openConfirm('自動排序', '確定要依名稱（新 -> 舊）重新排序嗎？', async () => {
-             const newData = [...data].sort((a, b) => b.localeCompare(a, 'zh-Hant', { numeric: true }));
-             await updateDB(newData);
-        });
-    };
-
-    return (
-        <div className={`space-y-4 ${colSpan}`}>
-            <div className="flex justify-between items-end">
-                <h4 className="font-bold text-slate-700 flex items-center gap-2 text-lg">{icon} {title}</h4>
-                <button 
-                    onClick={handleAutoSort} 
-                    className="text-sm text-slate-400 hover:text-blue-600 flex items-center gap-1 transition-colors px-2 py-1 rounded hover:bg-slate-100"
-                    title="自動排序 (新->舊)"
-                >
-                    <ArrowDownAZ size={16} /> 排序
-                </button>
-            </div>
-            
-            <div className="flex gap-2">
-                <div className="flex-1 min-w-0">
-                    <input 
-                        type="text" 
-                        value={inputValue} 
-                        onChange={(e) => setInputValue(e.target.value)} 
-                        onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-                        placeholder={`新增${title}...`} 
-                        className="w-full px-4 py-3 border rounded-lg text-base h-12" 
-                    />
-                </div>
-                <button onClick={handleAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg shrink-0 h-12 flex items-center"><Plus className="w-5 h-5" /></button>
-            </div>
-            <div className="bg-slate-50 border rounded-lg p-2 max-h-60 overflow-y-auto space-y-1">
-                {data.map((item, idx) => {
-                    const isEditing = editState.index === idx;
-                    return (
-                        <div key={idx} className="flex justify-between items-center bg-white px-4 py-3 rounded shadow-sm border border-slate-100 group min-h-[48px]">
-                            {isEditing ? (
-                                <div className="flex items-center gap-2 w-full">
-                                    <input 
-                                        type="text" 
-                                        value={editState.value} 
-                                        onChange={(e) => setEditState({ ...editState, value: e.target.value })}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                                        className="flex-1 border rounded px-2 py-1 text-base bg-blue-50 focus:ring-2 focus:ring-blue-500 outline-none min-w-0 h-10"
-                                        autoFocus
-                                    />
-                                    <button onClick={handleSaveEdit} className="text-green-600 hover:bg-green-100 p-2 rounded shrink-0"><Check className="w-5 h-5" /></button>
-                                    <button onClick={() => setEditState({ index: null, value: '' })} className="text-red-500 hover:bg-red-100 p-2 rounded shrink-0"><X className="w-5 h-5" /></button>
-                                </div>
-                            ) : (
-                                <>
-                                    <span className="text-base text-slate-700 flex-1 min-w-0 break-all">{item}</span>
-                                    <div className="flex gap-1 shrink-0 opacity-100"> 
-                                        <div className="flex flex-col gap-0.5 mr-2">
-                                            <button 
-                                                onClick={() => handleMove(idx, 'up')} 
-                                                disabled={idx === 0}
-                                                className={`text-slate-300 hover:text-blue-500 ${idx === 0 ? 'invisible' : ''}`}
-                                            >
-                                                <ChevronUp size={14} />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleMove(idx, 'down')} 
-                                                disabled={idx === data.length - 1}
-                                                className={`text-slate-300 hover:text-blue-500 ${idx === data.length - 1 ? 'invisible' : ''}`}
-                                            >
-                                                <ChevronRightIcon size={14} className="rotate-90" />
-                                            </button>
-                                        </div>
-                                        
-                                        <button onClick={() => setEditState({ index: idx, value: item })} className="text-slate-400 hover:text-blue-600 p-2" title="修改"><Pencil className="w-5 h-5" /></button>
-                                        <button onClick={() => handleRemove(idx)} className="text-slate-400 hover:text-red-500 p-2" title="刪除"><Trash2 className="w-5 h-5" /></button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    );
-                })}
-                {data.length === 0 && <div className="text-sm text-gray-400 text-center py-6">暫無資料</div>}
-            </div>
+        {/* Header */}
+        <div className="p-4 md:p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl shrink-0">
+          <div>
+            <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
+              <Settings className="text-slate-600" /> 參數設定
+            </h3>
+            <p className="text-xs md:text-sm text-slate-500 mt-1">管理下拉選單的預設選項</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+            <X size={24} className="text-slate-500" />
+          </button>
         </div>
-    );
-};
 
-const SettingsModal = ({ isOpen, onClose, initialData, db, appId, openAlert, openConfirm }) => {
-    if (!isOpen) return null;
-    const { units, projects, vendors } = initialData;
-    return (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[85vh] flex flex-col">
-          <div className="p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
-              <h3 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Settings className="w-7 h-7 text-blue-600" />共用參數設定</h3>
-              <button onClick={onClose}><X className="w-8 h-8 text-slate-400 hover:text-slate-600 transition-colors" /></button>
+        {/* Tabs - 手機版優化：可橫向捲動 */}
+        <div className="flex border-b border-slate-200 overflow-x-auto shrink-0 no-scrollbar">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => { setActiveTab(tab.id); cancelEdit(); }}
+              className={`flex items-center gap-2 px-6 py-4 text-sm font-bold whitespace-nowrap border-b-2 transition-colors flex-1 justify-center
+                ${activeTab === tab.id ? 'border-blue-600 text-blue-600 bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}
+              `}
+            >
+              {tab.icon} {tab.label}
+              <span className="ml-1 bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full text-xs">
+                {localData[tab.id]?.length || 0}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Content Body */}
+        <div className="flex-1 overflow-hidden flex flex-col p-4 md:p-6">
+          
+          {/* 輸入區 - 手機版優化：上下排列 */}
+          <div className="flex flex-col sm:flex-row gap-2 mb-4 shrink-0">
+            <input 
+              type="text" 
+              value={newItem} 
+              onChange={e => setNewItem(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddItem()}
+              placeholder={`新增${tabs.find(t => t.id === activeTab)?.label}名稱...`} 
+              className="flex-1 p-3 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button 
+              onClick={handleAddItem}
+              disabled={!newItem.trim()}
+              className="bg-blue-600 text-white px-4 py-3 sm:py-2 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm active:transform active:scale-95 transition-all"
+            >
+              <Plus size={20} /> 新增
+            </button>
           </div>
-          <div className="p-8 overflow-y-auto grid md:grid-cols-12 gap-8 text-left flex-1">
-             <SettingsSection title="行政處室" icon={<Building className="w-6 h-6 text-blue-500" />} data={units} fieldName="units" colSpan="col-span-12 md:col-span-3" db={db} appId={appId} openAlert={openAlert} openConfirm={openConfirm} />
-             <SettingsSection title="計畫來源" icon={<Landmark className="w-6 h-6 text-orange-500" />} data={projects} fieldName="projects" colSpan="col-span-12 md:col-span-5" db={db} appId={appId} openAlert={openAlert} openConfirm={openConfirm} />
-             <SettingsSection title="合作廠商" icon={<Store className="w-6 h-6 text-green-500" />} data={vendors} fieldName="vendors" colSpan="col-span-12 md:col-span-4" db={db} appId={appId} openAlert={openAlert} openConfirm={openConfirm} />
-          </div>
-          <div className="p-6 border-t bg-slate-50 rounded-b-xl flex justify-end gap-3">
-              <div className="flex gap-3 items-center w-full justify-end">
-                <span className="text-sm text-slate-500 mr-2 font-medium">* 所有修改即時生效</span>
-                <button onClick={onClose} className="px-8 py-3 bg-blue-600 text-white rounded-xl flex items-center gap-2 shadow-lg font-bold hover:bg-blue-700 transition-colors text-lg">關閉</button>
+
+          {/* 列表區 - 響應式高度與間距 */}
+          <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-2">
+            {localData[activeTab]?.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 min-h-[200px]">
+                <AlertCircle size={32} className="opacity-20" />
+                <p>目前沒有資料，請新增項目</p>
               </div>
+            ) : (
+              localData[activeTab]?.map((item, index) => (
+                <div key={index} className={`flex justify-between items-center p-3 bg-white rounded-lg border shadow-sm transition-all ${editingIndex === index ? 'border-blue-500 ring-1 ring-blue-200' : 'border-slate-200 hover:border-blue-300'}`}>
+                  
+                  {editingIndex === index ? (
+                    /* 編輯模式 */
+                    <div className="flex flex-1 gap-2 items-center">
+                        <input 
+                            type="text" 
+                            value={editValue} 
+                            onChange={e => setEditValue(e.target.value)}
+                            className="flex-1 p-1.5 border border-slate-300 rounded bg-white outline-none focus:border-blue-500"
+                            autoFocus
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') saveEdit(index);
+                                if (e.key === 'Escape') cancelEdit();
+                            }}
+                        />
+                        <button onClick={() => saveEdit(index)} className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"><Check size={18} /></button>
+                        <button onClick={cancelEdit} className="p-1.5 bg-slate-100 text-slate-500 rounded hover:bg-slate-200"><X size={18} /></button>
+                    </div>
+                  ) : (
+                    /* 顯示模式 */
+                    <>
+                        <span className="font-medium text-slate-700 break-all pr-2 flex-1">{item}</span>
+                        <div className="flex gap-1 shrink-0">
+                            <button 
+                                onClick={() => startEdit(index, item)}
+                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="修改"
+                            >
+                                <Edit2 size={18} />
+                            </button>
+                            <button 
+                                onClick={() => handleDeleteItem(item)}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                title="移除"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-3 shrink-0">
+          <button 
+            onClick={onClose} 
+            className="px-6 py-2.5 text-slate-500 font-bold hover:bg-slate-200 rounded-lg transition-colors"
+          >
+            取消
+          </button>
+          <button 
+            onClick={handleSave} 
+            disabled={isSaving}
+            className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md flex items-center gap-2 disabled:opacity-50 transition-colors"
+          >
+            <Save size={18} /> {isSaving ? '儲存中...' : '儲存變更'}
+          </button>
+        </div>
+
       </div>
-    );
+    </div>
+  );
 };
+
 export default SettingsModal;

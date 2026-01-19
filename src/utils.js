@@ -1,5 +1,6 @@
 import { STATUS_STEPS } from './constants';
 
+// ... (上方原有的日期處理、CSV解析函式保持不變，不用動) ...
 /**
  * 將 ISO 日期字串 (2023-12-25) 轉為民國格式 (112-12/25)
  */
@@ -17,7 +18,6 @@ export const minguoToIso = (minguoStr) => {
   if (!minguoStr) return '';
   let cleanStr = minguoStr.replace(/[^\d]/g, '');
   
-  // 處理純數字格式 (e.g. 1120101)
   if (cleanStr.length === 6 || cleanStr.length === 7) {
     const yLen = cleanStr.length === 7 ? 3 : 2;
     const y = parseInt(cleanStr.substring(0, yLen)) + 1911;
@@ -26,7 +26,6 @@ export const minguoToIso = (minguoStr) => {
     return `${y}-${m}-${d}`;
   }
   
-  // 處理分隔符號格式
   const parts = minguoStr.split(/[-/.]/);
   if (parts.length === 3) {
       const y = parseInt(parts[0]) + 1911;
@@ -75,6 +74,7 @@ export const generateMonthList = () => {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = `${d.getFullYear() - 1911}年${d.getMonth() + 1}月`;
+    const labelFull = `${d.getFullYear() - 1911}/${String(d.getMonth() + 1).padStart(2, '0')}`;
     months.push({ value, label });
   }
   return months.reverse();
@@ -84,9 +84,7 @@ export const generateMonthList = () => {
  * 解析 CSV 單行資料 (包含處理引號與 BOM)
  */
 export const parseCSVLine = (line) => {
-  // ★重要修改：移除行首可能存在的 BOM 字元，避免標題判斷錯誤
   const cleanLine = line.replace(/^\uFEFF/, '');
-  
   const result = [];
   let start = 0;
   let inQuotes = false;
@@ -96,7 +94,6 @@ export const parseCSVLine = (line) => {
       inQuotes = !inQuotes;
     } else if (cleanLine[i] === ',' && !inQuotes) {
       let field = cleanLine.substring(start, i);
-      // 移除欄位前後的引號，並處理雙引號轉義
       if (field.startsWith('"') && field.endsWith('"')) {
           field = field.slice(1, -1).replace(/""/g, '"');
       }
@@ -105,13 +102,11 @@ export const parseCSVLine = (line) => {
     }
   }
   
-  // 處理最後一個欄位
   let field = cleanLine.substring(start);
   if (field.startsWith('"') && field.endsWith('"')) {
       field = field.slice(1, -1).replace(/""/g, '"');
   }
   result.push(field);
-  
   return result;
 };
 
@@ -126,13 +121,12 @@ export const getOperatorName = (user) => {
 };
 
 /**
- * 產生 CSV 內容字串 (包含 BOM 以支援 Excel)
+ * 產生 CSV 內容字串 (給人類閱讀的報表)
  */
 export const generateCSV = (dataToExport) => {
     const headers = ['流水號', '原申請單日期', '是否速件', '申請日期', '申請單位', '申請人', '計畫補助', '廠商', '品項名稱', '數量', '單位', '單價', '小計', '領回人', '目前狀態', '目前狀態時間', '備註'];
     let csvRows = [];
     
-    // Helper to escape CSV fields
     const escape = (val) => {
         if (val === null || val === undefined) return '""';
         return `"${String(val).replace(/"/g, '""')}"`;
@@ -144,7 +138,6 @@ export const generateCSV = (dataToExport) => {
       const statusStr = STATUS_STEPS[f.status]?.label || f.status;
       const statusTimeStr = f.updatedAt?.toDate ? formatDate(f.updatedAt.toDate().toISOString()) : '-';
       
-      // 如果有多個品項，將其拆分為多行
       if (f.items && f.items.length > 0) {
           f.items.forEach(item => {
               const row = [
@@ -169,7 +162,6 @@ export const generateCSV = (dataToExport) => {
               csvRows.push(row);
           });
       } else {
-          // 如果沒有品項的例外處理
           const row = [
             f.serialId, 
             appDateStr, 
@@ -190,7 +182,6 @@ export const generateCSV = (dataToExport) => {
       }
     });
     
-    // 加入 BOM (\uFEFF) 讓 Excel 能正確識別 UTF-8
     return '\uFEFF' + [headers.map(escape).join(','), ...csvRows].join('\n');
 };
 
@@ -204,4 +195,78 @@ export const downloadCSV = (content, filename) => {
     link.href = url; 
     link.download = filename; 
     link.click();
+};
+
+// ==========================================
+// ★ 新增功能：完整備份與還原 (JSON 格式)
+// ==========================================
+
+export const generateBackupJSON = (dataToExport) => {
+    return JSON.stringify(dataToExport, null, 2);
+};
+
+export const downloadJSON = (content, filename) => {
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); 
+    link.href = url; 
+    link.download = filename; 
+    link.click();
+};
+
+/**
+ * [匯入處理] 智慧合併邏輯 (修正版)
+ * 修正重點：將欄位名稱 'history' 改回系統標準的 'logs'，確保 UI 能正確顯示。
+ */
+export const processBackupImport = (currentDBData, importedFileData) => {
+    const currentDataMap = new Map(currentDBData.map(item => [item.id, item]));
+    const mergedResults = [];
+    
+    // 使用 ISO String 以符合 App.js 裡的 logs 格式
+    const timestampStr = new Date().toISOString(); 
+
+    importedFileData.forEach(importItem => {
+        // 準備新的歷程紀錄 (Log)
+        // ★ 關鍵修正：這裡的欄位名稱必須跟 App.js 裡的一模一樣 (status, timestamp, note, operator)
+        const importLogRecord = {
+            status: importItem.status, 
+            timestamp: timestampStr, 
+            note: "系統批次匯入 (還原)", // 這是您想看的那一行
+            operator: "系統"
+        };
+
+        // 檢查是否已存在
+        if (currentDataMap.has(importItem.id)) {
+            // ★ 修正：讀取 'logs' 而不是 'history'
+            const newLogs = [
+                ...(importItem.logs || []), // 保留 JSON 檔裡的舊 logs
+                importLogRecord // 加上新的一行
+            ];
+
+            mergedResults.push({
+                ...importItem,
+                logs: newLogs // ★ 修正：寫入 'logs'
+            });
+
+            currentDataMap.delete(importItem.id);
+        } else {
+            // 全新資料
+            const newLogs = [
+                ...(importItem.logs || []),
+                importLogRecord
+            ];
+
+            mergedResults.push({
+                ...importItem,
+                logs: newLogs
+            });
+        }
+    });
+
+    // 保留公司有、但匯入檔沒有的資料
+    currentDataMap.forEach(existingItem => {
+        mergedResults.push(existingItem);
+    });
+
+    return mergedResults;
 };
