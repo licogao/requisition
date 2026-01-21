@@ -1,94 +1,292 @@
 import React from 'react';
 import { 
-  ChevronRight, ChevronDown, Flame, Trash2, Edit2, FileText, Clock, RotateCcw, CheckCircle, ArrowRight 
+  Clock, PlayCircle, CheckCircle, AlertCircle, ArrowRight, RotateCcw, XCircle, Edit2, FileText, User, Building, Briefcase, Truck, CheckSquare 
 } from 'lucide-react';
-import { STATUS_STEPS, REVERSE_STEPS } from '../constants';
-import { isoToMinguo, formatDate } from '../utils';
 
-const FormRow = ({ form, expandedId, setExpandedId, onAction }) => {
-    const nextAction = STATUS_STEPS[form.status]?.nextAction;
-    const canRevert = REVERSE_STEPS[form.status];
-    const isExpanded = expandedId === form.id;
-
-    return (
-      <React.Fragment>
-        <tr className={`transition-colors cursor-pointer border-b ${form.isUrgent ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50'} ${isExpanded ? (form.isUrgent ? 'bg-red-100' : 'bg-blue-50') : ''}`} onClick={() => setExpandedId(isExpanded ? null : form.id)}>
-          <td className="p-4 text-center">{isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</td>
-          <td className="p-4 w-32 md:w-1/6">
-            <div className="flex items-center gap-1 mb-1">
-              {form.isUrgent && <Flame className="w-4 h-4 text-red-500 fill-red-500" />}
-              <div className={`text-xs font-mono px-1.5 py-0.5 rounded border ${form.isUrgent ? 'text-red-700 bg-red-100' : 'text-blue-600 bg-blue-50'}`}>{String(form.serialId || '')}</div>
-            </div>
-            <div className="font-bold truncate">{String(form.unit || '')}</div>
-            <div className="text-xs text-slate-500 truncate">{String(form.applicant || '')}</div>
-          </td>
-          <td className="p-4 w-1/3">
-            <div className="text-sm font-medium line-clamp-2">{String(form.subject || '')}</div>
-            <div className="text-lg text-blue-600 font-bold mt-1">${(form.totalPrice || 0).toLocaleString()}</div>
-          </td>
-          <td className="p-4 whitespace-nowrap">
-            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${STATUS_STEPS[form.status]?.color || 'bg-slate-100'}`}>{STATUS_STEPS[form.status]?.label || form.status}</span>
-            <div className="text-sm text-slate-400 mt-2">{formatDate(form.updatedAt?.toDate ? form.updatedAt.toDate().toISOString() : '')}</div>
-          </td>
-          <td className="p-4 whitespace-nowrap" onClick={e => e.stopPropagation()}>
-            <div className="flex gap-2">
-              {canRevert && (
-                <button onClick={() => onAction('revert', form)} className="bg-red-500 text-white text-xs px-3 py-2 rounded shadow flex items-center justify-center gap-1 hover:bg-red-600"><RotateCcw size={12} />退回</button>
-              )}
-              {nextAction && <button onClick={() => onAction('advance', form)} className="bg-emerald-600 text-white text-xs px-3 py-2 rounded shadow flex items-center justify-center gap-1 hover:bg-emerald-700">{nextAction === '全案結案' ? <CheckCircle size={12} /> : <ArrowRight size={12} />}{nextAction}</button>}
-            </div>
-          </td>
-          <td className="p-4 text-right w-14" onClick={e => e.stopPropagation()}><button onClick={() => onAction('delete', form)} className="text-slate-300 hover:text-red-500"><Trash2 size={16} /></button></td>
-        </tr>
-        {isExpanded && (
-          <tr className="bg-slate-50 border-b border-gray-200">
-            <td colSpan="6" className="p-0">
-               <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-300">
-                 <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm relative">
-                   <button onClick={() => onAction('edit', form)} className="absolute top-4 right-4 text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors" title="修改資料"><Edit2 size={20} /></button>
-                   <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><FileText size={16} /> 詳細資訊</h4>
-                   <div className="space-y-2 text-sm">
-                     <div className="flex justify-between border-b border-dashed py-1 text-xs text-slate-500"><span>狀態/急件</span><span className={form.isUrgent?'text-red-600 font-bold':'text-slate-700'}>{form.isUrgent?'🔥 急件':'一般案件'}</span></div>
-                     {form.applicationDate && <div className="flex justify-between border-b border-dashed py-1"><span>申請單日期 (填單日)</span><span className="font-mono text-slate-700">{isoToMinguo(form.applicationDate)}</span></div>}
-                     <div className="flex justify-between border-b border-dashed py-1"><span>申請單位</span><span className="font-medium">{String(form.unit || '')}</span></div>
-                     <div className="flex justify-between border-b border-dashed py-1"><span>申請人</span><span className="font-medium">{String(form.applicant || '-')}</span></div>
-                     <div className="flex justify-between border-b border-dashed py-1"><span>計畫補助</span><span className="font-medium text-orange-600">{String(form.subsidy || '無')}</span></div>
-                     {form.vendor && <div className="flex justify-between border-b border-dashed py-1"><span>廠商</span><span className="font-medium text-green-600">{String(form.vendor)}</span></div>}
-                     {form.receiverName && <div className="flex justify-between border-b border-dashed py-1"><span>領回人</span><span className="font-medium text-purple-600">{String(form.receiverName)}</span></div>}
-                     {form.globalRemark && <div className="bg-yellow-50 p-2 rounded text-xs mt-2 border border-yellow-100"><span className="font-bold text-yellow-800">全域備註：</span>{String(form.globalRemark)}</div>}
-                     
-                     {/* 修正：加入 break-all 與 whitespace-normal 防止破圖 */}
-                     <div className="mt-4">
-                        <p className="text-xs text-slate-400 mb-2">品項清單：</p>
-                        <div className="bg-slate-50 rounded p-2 space-y-1">
-                            {form.items?.map((item, idx) => (
-                                <div key={idx} className="flex justify-between text-xs border-b border-slate-200 last:border-0 pb-1">
-                                    <span className="break-all whitespace-normal pr-2">{idx+1}. {String(item.subject)}</span>
-                                    <span className="shrink-0">{item.quantity}{item.measureUnit} x ${item.unitPrice}</span>
-                                </div>
-                            ))}
-                        </div>
-                     </div>
-
-                     <div className="flex justify-between py-1 mt-2 pt-2 border-t"><span className="font-bold">總金額</span><span className="font-bold text-blue-600 text-lg">${(form.totalPrice || 0).toLocaleString()}</span></div>
-                   </div>
-                 </div>
-                 <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                   <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Clock size={16} /> 歷程紀錄</h4>
-                   <div className="space-y-4 relative before:absolute before:inset-0 before:ml-2.5 before:-translate-x-px before:h-full before:w-0.5 before:bg-gray-200">
-                     {form.logs?.map((log, i) => (<div key={i} className="relative flex items-center group"><div className={`absolute left-0 w-5 h-5 rounded-full border-2 border-white shadow-sm flex items-center justify-center ${log.note?.includes('退回') ? 'bg-orange-500' : 'bg-blue-500'}`}></div><div className="ml-8 text-sm"><div className={`font-medium ${log.note?.includes('退回') ? 'text-orange-600' : 'text-gray-900'}`}>{String(log.note || STATUS_STEPS[log.status]?.label || '')}</div>
-                     <div className="text-gray-400 text-sm">
-                        {formatDate(log.timestamp)}
-                        {log.operator && <span className="ml-2 text-slate-500">({log.operator})</span>}
-                     </div>
-                     </div></div>))}
-                   </div>
-                 </div>
-               </div>
-            </td>
-          </tr>
-        )}
-      </React.Fragment>
-    );
+const isoToMinguo = (isoDateStr) => {
+  if (!isoDateStr) return '';
+  const parts = isoDateStr.split('-');
+  if (parts.length !== 3) return isoDateStr;
+  return `${parseInt(parts[0]) - 1911}-${parts[1]}/${parts[2]}`; 
 };
+
+const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect, statusSteps, canRevert }) => {
+  const isExpanded = expandedId === form.id;
+  const statusConfig = statusSteps?.[form.status] || {};
+
+  const getStatusColor = (phase) => {
+    if (phase === 1) return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (phase === 2) return 'bg-orange-100 text-orange-700 border-orange-200';
+    if (phase === 3) return 'bg-slate-900 text-white border-slate-700';
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
+  const getStatusIcon = (phase) => {
+    if (phase === 1) return <PlayCircle size={16} />;
+    if (phase === 2) return <Clock size={16} />;
+    if (phase === 3) return <CheckCircle size={16} />;
+    return <AlertCircle size={16} />;
+  };
+
+  const getValidDate = (val) => {
+    if (!val) return null;
+    if (typeof val.toDate === 'function') return val.toDate();
+    if (val?.seconds) return new Date(val.seconds * 1000);
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const formatMinguoTime = (rawDate) => {
+    const date = getValidDate(rawDate);
+    if (!date) return '-';
+    
+    try {
+        const year = date.getFullYear() - 1911;
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        return `${year}/${month}/${day} ${hour}:${minute}`;
+    } catch (e) { return '-'; }
+  };
+
+  const getLogTextColor = (note) => {
+      if (note?.includes('退回')) return 'text-red-600 font-bold';
+      if (note?.includes('領回')) return 'text-purple-600 font-bold';
+      return 'text-slate-900 font-medium'; 
+  };
+
+  return (
+    <>
+      <tr 
+        className={`
+            border-b border-slate-100 transition-colors 
+            ${isExpanded ? 'bg-blue-50/30' : ''} 
+            ${form.isUrgent 
+                ? 'bg-red-50 hover:bg-red-100'
+                : 'hover:bg-blue-50/50'
+            }
+        `}
+      >
+        <td className="p-4 text-center w-12">
+          <input 
+            type="checkbox" 
+            checked={selected} 
+            onChange={(e) => onSelect(form.id, e.target.checked)}
+            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+          />
+        </td>
+
+        <td className="p-4 align-top cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : form.id)}>
+          <div className="font-mono font-bold text-slate-700 text-base">{form.serialId}</div>
+          <div className="text-xs text-slate-500 mt-1">{form.unit}</div>
+          <div className="text-xs text-slate-400">{form.applicant}</div>
+          {form.isUrgent && (
+            <span className="inline-block mt-2 px-2 py-0.5 bg-red-100 text-red-600 text-xs font-bold rounded border border-red-200 animate-pulse">
+              速件
+            </span>
+          )}
+        </td>
+
+        <td className="p-4 align-top cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : form.id)}>
+          <div className="font-bold text-slate-800 text-lg mb-1 line-clamp-2">{form.subject}</div>
+          <div className="flex items-center gap-2 text-sm text-slate-500 flex-wrap">
+            <span className="bg-slate-100 px-2 py-0.5 rounded text-xs">預算: ${parseInt(form.totalPrice || 0).toLocaleString()}</span>
+            {form.subsidy && <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs border border-green-100">{form.subsidy}</span>}
+          </div>
+          {form.vendor && <div className="text-xs text-slate-400 mt-1">廠商: {form.vendor}</div>}
+        </td>
+
+        <td className="p-4 align-top cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : form.id)}>
+          <div className="flex flex-col gap-1.5">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border w-fit ${getStatusColor(statusConfig.phase)}`}>
+              {getStatusIcon(statusConfig.phase)}
+              {statusConfig.label}
+            </span>
+            <div className="text-xs text-slate-400 font-mono pl-1">
+              {formatMinguoTime(form.updatedAt)}
+            </div>
+            {form.receiverName && (
+               <div className="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100">
+                 領: {form.receiverName}
+               </div>
+            )}
+          </div>
+        </td>
+
+        <td className="p-4 align-top">
+          <div className="flex flex-col gap-2">
+            {statusConfig.phase < 3 && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); onAction('advance', form); }}
+                className="flex items-center justify-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-xs font-bold shadow-sm transition-all whitespace-nowrap"
+              >
+                {statusConfig.nextAction} <ArrowRight size={14} />
+              </button>
+            )}
+            
+            {canRevert && (
+               <button 
+                 onClick={(e) => { e.stopPropagation(); onAction('revert', form); }}
+                 className="flex items-center justify-center gap-1 px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded hover:bg-red-100 text-xs font-bold transition-all whitespace-nowrap"
+               >
+                 <RotateCcw size={14} /> 退回
+               </button>
+            )}
+          </div>
+        </td>
+
+        <td className="p-4 text-center align-top">
+           <div className="flex flex-col gap-2 items-center">
+             <button 
+                onClick={(e) => { e.stopPropagation(); onAction('delete', form); }}
+                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors" 
+                title="刪除"
+             >
+                <XCircle size={18} />
+             </button>
+           </div>
+        </td>
+      </tr>
+      
+      {isExpanded && (
+        <tr className={`border-b border-slate-200 ${form.isUrgent ? 'bg-red-50' : 'bg-slate-50/50'}`}>
+          <td colSpan="6" className="p-0">
+            <div className="flex flex-col md:flex-row">
+               
+               <div className="flex-1 p-6 relative">
+                  <button 
+                     onClick={(e) => { e.stopPropagation(); onAction('edit', form); }}
+                     className="absolute top-4 right-4 p-2 bg-white text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 hover:shadow-md transition-all z-10"
+                     title="編輯申請單"
+                  >
+                     <Edit2 size={18} />
+                  </button>
+
+                  <h4 className="font-bold text-slate-700 text-xl mb-6 flex items-center gap-2 border-b border-slate-200 pb-3">
+                    <FileText size={24} className="text-blue-500" />
+                    申請單詳情 
+                    <span className="text-base font-normal text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded font-mono ml-2">
+                        {form.serialId}
+                    </span>
+                  </h4>
+
+                  <div className="space-y-4 mb-6">
+                    <div className="flex items-center gap-3">
+                        <span className="w-24 text-sm font-bold text-slate-500 text-right uppercase tracking-wider">申請日期</span>
+                        <span className="font-mono text-slate-800 text-base font-medium bg-white px-2 py-1 rounded border border-slate-200">
+                            {form.applicationDate ? isoToMinguo(form.applicationDate) : '-'}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <span className="w-24 text-sm font-bold text-slate-500 text-right uppercase tracking-wider">申請單位</span>
+                        <div className="flex items-center gap-2 text-base">
+                            <Building size={18} className="text-slate-400" />
+                            <span className="text-slate-900 font-medium">{form.unit}</span>
+                            <span className="text-slate-300">|</span>
+                            <User size={18} className="text-slate-400" />
+                            <span className="text-slate-900 font-medium">{form.applicant}</span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <span className="w-24 text-sm font-bold text-slate-500 text-right uppercase tracking-wider">計畫補助</span>
+                        <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-base font-bold border border-green-100 flex items-center gap-1.5">
+                            <Briefcase size={16} />
+                            {form.subsidy || '無'}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <span className="w-24 text-sm font-bold text-slate-500 text-right uppercase tracking-wider">廠商</span>
+                        <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-base font-bold border border-blue-100 flex items-center gap-1.5">
+                            <Truck size={16} />
+                            {form.vendor || '-'}
+                        </span>
+                    </div>
+
+                    {form.receiverName && (
+                        <div className="flex items-center gap-3">
+                            <span className="w-24 text-sm font-bold text-slate-500 text-right uppercase tracking-wider">領回人</span>
+                            <span className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-base font-bold border border-purple-100 flex items-center gap-1.5">
+                                <CheckSquare size={16} />
+                                {form.receiverName}
+                            </span>
+                        </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white rounded border border-slate-200 overflow-hidden mb-4 shadow-sm">
+                    <table className="w-full text-base">
+                      <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                        <tr>
+                          <th className="p-3 text-left">品項名稱</th>
+                          <th className="p-3 text-right">單價</th>
+                          <th className="p-3 text-center">數量</th>
+                          <th className="p-3 text-right">小計</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {(form.items || []).map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="p-3 text-slate-800 font-medium">{item.subject}</td>
+                            <td className="p-3 text-right font-mono text-slate-600">${parseInt(item.unitPrice).toLocaleString()}</td>
+                            <td className="p-3 text-center text-slate-700">{item.quantity} {item.measureUnit}</td>
+                            <td className="p-3 text-right font-bold text-slate-900">${parseInt(item.subtotal).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-slate-50/50 font-bold border-t border-slate-200">
+                            <td colSpan="3" className="p-3 text-right text-slate-600">總金額</td>
+                            <td className="p-3 text-right text-blue-700 text-xl">${parseInt(form.totalPrice || 0).toLocaleString()}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {form.globalRemark && (
+                    <div className="bg-yellow-50 p-4 rounded border border-yellow-200 text-yellow-900 text-base flex gap-3 items-start">
+                      <strong className="shrink-0 bg-yellow-100 px-2 py-0.5 rounded text-sm text-yellow-800">備註</strong>
+                      <span className="leading-relaxed">{form.globalRemark}</span>
+                    </div>
+                  )}
+               </div>
+
+               <div className={`w-full md:w-1/3 border-l border-slate-200 p-6 ${form.isUrgent ? 'bg-red-50' : 'bg-slate-50'}`}>
+                  <h4 className="font-bold text-slate-600 border-b border-slate-200 pb-3 mb-5 flex items-center gap-2 text-lg">
+                    <Clock size={20} /> 操作歷程
+                  </h4>
+                  <div className="space-y-8 relative pl-2">
+                    <div className="absolute top-3 bottom-3 left-[7px] w-0.5 bg-slate-200"></div>
+                    {(form.logs || []).slice().reverse().map((log, idx) => (
+                      <div key={idx} className="relative pl-6">
+                        <div className={`absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 ring-4 ${form.isUrgent ? 'ring-red-100' : 'ring-slate-50'} ${idx === 0 ? 'bg-blue-500 border-blue-500' : 'bg-white border-slate-300'}`}></div>
+                        
+                        <div className="flex flex-col gap-1.5">
+                            <span className={`text-lg font-bold font-mono tracking-tight ${idx === 0 ? 'text-slate-900' : 'text-slate-500'}`}>
+                                {formatMinguoTime(log.timestamp)}
+                            </span>
+                            
+                            <div className={`text-base ${getLogTextColor(log.note || log.status)}`}>
+                                {log.note || log.status}
+                            </div>
+                            
+                            <div className="text-sm text-slate-500 flex items-center gap-1 mt-0.5">
+                                <User size={14} />
+                                {log.operator}
+                            </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+               </div>
+
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+};
+
 export default FormRow;

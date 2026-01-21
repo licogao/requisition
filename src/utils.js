@@ -1,8 +1,5 @@
 import { STATUS_STEPS } from './constants';
 
-/**
- * ISO 日期轉民國 (2023-12-25 -> 112-12/25)
- */
 export const isoToMinguo = (isoDateStr) => {
   if (!isoDateStr) return '';
   const parts = isoDateStr.split('-');
@@ -10,9 +7,6 @@ export const isoToMinguo = (isoDateStr) => {
   return `${parseInt(parts[0]) - 1911}-${parts[1]}/${parts[2]}`; 
 };
 
-/**
- * 民國日期轉 ISO
- */
 export const minguoToIso = (minguoStr) => {
   if (!minguoStr) return '';
   let cleanStr = minguoStr.replace(/[^\d]/g, '');
@@ -35,9 +29,6 @@ export const minguoToIso = (minguoStr) => {
   return '';
 };
 
-/**
- * 格式化完整日期時間
- */
 export const formatDate = (isoString) => {
   if (!isoString) return '-';
   try {
@@ -52,9 +43,6 @@ export const formatDate = (isoString) => {
   } catch (e) { return '-'; }
 };
 
-/**
- * Date 物件轉民國日期
- */
 export const toMinguoDate = (dateObj) => {
   if (!dateObj || isNaN(dateObj.getTime())) return '-';
   const y = dateObj.getFullYear() - 1911;
@@ -63,9 +51,6 @@ export const toMinguoDate = (dateObj) => {
   return `${y}/${m}/${d}`;
 };
 
-/**
- * 產生月份清單
- */
 export const generateMonthList = () => {
   const months = [];
   const today = new Date();
@@ -78,9 +63,6 @@ export const generateMonthList = () => {
   return months.reverse();
 };
 
-/**
- * 解析 CSV 單行 (含 BOM 處理)
- */
 export const parseCSVLine = (line) => {
   const cleanLine = line.replace(/^\uFEFF/, '');
   const result = [];
@@ -108,9 +90,6 @@ export const parseCSVLine = (line) => {
   return result;
 };
 
-/**
- * 取得操作人員顯示名稱
- */
 export const getOperatorName = (user) => {
     if (!user) return '未知';
     if (user.isAnonymous) return '訪客';
@@ -118,9 +97,6 @@ export const getOperatorName = (user) => {
     return '管理員';
 };
 
-/**
- * 產生 CSV 內容
- */
 export const generateCSV = (dataToExport) => {
     const headers = ['流水號', '原申請單日期', '是否速件', '申請日期', '申請單位', '申請人', '計畫補助', '廠商', '品項名稱', '數量', '單位', '單價', '小計', '領回人', '目前狀態', '目前狀態時間', '備註'];
     let csvRows = [];
@@ -130,11 +106,22 @@ export const generateCSV = (dataToExport) => {
         return `"${String(val).replace(/"/g, '""')}"`;
     };
 
+    const getValidDate = (val) => {
+        if (!val) return null;
+        if (typeof val.toDate === 'function') return val.toDate();
+        if (val?.seconds) return new Date(val.seconds * 1000);
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+    };
+
     dataToExport.forEach(f => {
-      const dateStr = f.createdAt?.toDate ? toMinguoDate(f.createdAt.toDate()) : '-';
+      const createdDate = getValidDate(f.createdAt);
+      const dateStr = createdDate ? toMinguoDate(createdDate) : '-';
       const appDateStr = isoToMinguo(f.applicationDate);
       const statusStr = STATUS_STEPS[f.status]?.label || f.status;
-      const statusTimeStr = f.updatedAt?.toDate ? formatDate(f.updatedAt.toDate().toISOString()) : '-';
+      
+      const updatedDate = getValidDate(f.updatedAt);
+      const statusTimeStr = updatedDate ? formatDate(updatedDate.toISOString()) : '-';
       
       if (f.items && f.items.length > 0) {
           f.items.forEach(item => {
@@ -158,9 +145,6 @@ export const generateCSV = (dataToExport) => {
     return '\uFEFF' + [headers.map(escape).join(','), ...csvRows].join('\n');
 };
 
-/**
- * 下載 CSV 檔案
- */
 export const downloadCSV = (content, filename) => {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -170,16 +154,10 @@ export const downloadCSV = (content, filename) => {
     link.click();
 };
 
-/**
- * 產生 JSON 備份內容
- */
 export const generateBackupJSON = (dataToExport) => {
     return JSON.stringify(dataToExport, null, 2);
 };
 
-/**
- * 下載 JSON 檔案
- */
 export const downloadJSON = (content, filename) => {
     const blob = new Blob([content], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -189,9 +167,6 @@ export const downloadJSON = (content, filename) => {
     link.click();
 };
 
-/**
- * JSON 匯入與歷程合併邏輯
- */
 export const processBackupImport = (currentDBData, importedFileData) => {
     const currentDataMap = new Map(currentDBData.map(item => [item.id, item]));
     const mergedResults = [];
@@ -205,13 +180,17 @@ export const processBackupImport = (currentDBData, importedFileData) => {
             operator: "系統"
         };
 
+        const newItem = {
+            ...importItem,
+            updatedAt: timestampStr,
+            logs: [...(importItem.logs || []), importLogRecord]
+        };
+
         if (currentDataMap.has(importItem.id)) {
-            const newLogs = [...(importItem.logs || []), importLogRecord];
-            mergedResults.push({ ...importItem, logs: newLogs });
+            mergedResults.push(newItem);
             currentDataMap.delete(importItem.id);
         } else {
-            const newLogs = [...(importItem.logs || []), importLogRecord];
-            mergedResults.push({ ...importItem, logs: newLogs });
+            mergedResults.push(newItem);
         }
     });
 
