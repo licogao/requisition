@@ -1,33 +1,38 @@
 import React from 'react';
 import { Download, Trash2, X, AlertTriangle, FolderCog } from 'lucide-react';
-// ★ 已移除 import { STATUS_STEPS }，完全依賴 props 傳入，確保穩定性
 
 const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport, statusSteps }) => {
   if (!isOpen) return null;
 
-  // 1. 篩選出所有已結案的資料
-  // 使用 props.statusSteps 並加上 ?. 保護
   const completedForms = forms.filter(f => statusSteps?.[f.status]?.phase === 3);
 
-  // 2. 依照「年-月」分組
   const grouped = {};
   completedForms.forEach(f => {
-    if (f.serialId) {
-       const d = f.createdAt?.toDate ? f.createdAt.toDate() : new Date();
-       const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-       
-       if (!grouped[key]) grouped[key] = [];
-       grouped[key].push(f);
+    let dateObj;
+    
+    if (f.applicationDate) {
+        dateObj = new Date(f.applicationDate);
+    } else if (f.createdAt?.toDate) {
+        dateObj = f.createdAt.toDate();
+    } else {
+        dateObj = new Date();
     }
+
+    if (isNaN(dateObj.getTime())) {
+        dateObj = new Date(); 
+    }
+
+    const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}`;
+    
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(f);
   });
 
-  // 排序月份 (由新到舊)
   const sortedKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
-        {/* Header */}
         <div className="p-4 md:p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
           <div>
             <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -40,13 +45,13 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
           
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start gap-3">
              <AlertTriangle className="text-blue-600 shrink-0 mt-0.5" size={20} />
              <div className="text-sm text-blue-800">
                 <strong>小提示：</strong> 建議在刪除任何月份的資料前，先執行「下載所有結案備份」以防萬一。
+                <br/><span className="text-xs text-blue-600 opacity-80">(分組依據：優先使用申請日期，若無則使用建立日期)</span>
              </div>
           </div>
 
@@ -76,7 +81,6 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t bg-slate-50 rounded-b-xl flex flex-col-reverse sm:flex-row justify-between items-center gap-3 sm:gap-0">
             <button 
               onClick={onExport}
