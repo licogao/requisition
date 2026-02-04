@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db, appId } from '../firebase';
-import { DEFAULT_UNITS, DEFAULT_PROJECTS, DEFAULT_VENDORS, DEFAULT_APPLICANTS } from '../constants'; // ★ 引入 DEFAULT_APPLICANTS
+import { DEFAULT_UNITS, DEFAULT_PROJECTS, DEFAULT_VENDORS, DEFAULT_APPLICANTS } from '../constants';
 
 export const useSettings = (user) => {
   const [unitOptions, setUnitOptions] = useState(DEFAULT_UNITS);
   const [projectOptions, setProjectOptions] = useState(DEFAULT_PROJECTS);
   const [vendorOptions, setVendorOptions] = useState(DEFAULT_VENDORS);
-  const [applicantOptions, setApplicantOptions] = useState(DEFAULT_APPLICANTS);
+  // ★ 修改：預設為物件結構 { "教務處": ["王小明"], ... }
+  const [applicantOptions, setApplicantOptions] = useState({}); 
 
   useEffect(() => {
     if (!user) return;
@@ -19,13 +20,23 @@ export const useSettings = (user) => {
         if (data.units) setUnitOptions(data.units);
         if (data.projects) setProjectOptions(data.projects);
         if (data.vendors) setVendorOptions(data.vendors);
-        if (data.applicants) setApplicantOptions(data.applicants);
+        
+        // ★ 修改：處理申請人資料結構
+        if (data.applicants) {
+            if (Array.isArray(data.applicants)) {
+                // 相容舊資料：如果是陣列，暫時歸類為 "未分類"
+                setApplicantOptions({ "未分類": data.applicants });
+            } else {
+                // 新格式：直接使用物件
+                setApplicantOptions(data.applicants);
+            }
+        }
       } else {
         setDoc(settingsRef, { 
           units: DEFAULT_UNITS, 
           projects: DEFAULT_PROJECTS, 
           vendors: DEFAULT_VENDORS,
-          applicants: DEFAULT_APPLICANTS
+          applicants: {} // 初始為空物件
         }).catch(err => {});
       }
     });

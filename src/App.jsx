@@ -37,12 +37,10 @@ export default function App() {
   const { unitOptions, projectOptions, vendorOptions, applicantOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
-  // --- UI State ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [monthTabs] = useState(generateMonthList());
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Filter State
   const [filterPhase, setFilterPhase] = useState('all');
   const [filterMonth, setFilterMonth] = useState(() => {
     const d = new Date();
@@ -63,12 +61,10 @@ export default function App() {
   const [isDebugClearOpen, setIsDebugClearOpen] = useState(false);
   const [isLogViewerOpen, setIsLogViewerOpen] = useState(false); 
 
-  // Export State
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [exportMode, setExportMode] = useState('all');
 
-  // Form State
   const [newUnit, setNewUnit] = useState('');
   const [newApplicant, setNewApplicant] = useState('');
   const [newSubsidy, setNewSubsidy] = useState('');
@@ -81,11 +77,8 @@ export default function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingFormId, setEditingFormId] = useState(null);
-  
-  // 自訂輸入模式狀態
   const [isCustomSubsidy, setIsCustomSubsidy] = useState(false);
   const [isCustomVendor, setIsCustomVendor] = useState(false);
-  // ★★★ 新增：單位與申請人的自訂狀態 ★★★
   const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [isCustomApplicant, setIsCustomApplicant] = useState(false);
   
@@ -103,7 +96,14 @@ export default function App() {
     return () => { document.body.style.overflow = ''; };
   }, [isSettingsOpen, isFormOpen, isExportModalOpen, modal.isOpen, isManageModalOpen, isDebugClearOpen, isLogViewerOpen, showExportFormatSelect]);
 
-  // --- 選取邏輯 ---
+  const availableApplicants = useMemo(() => {
+    if (!applicantOptions) return [];
+    if (newUnit && applicantOptions[newUnit]) {
+        return applicantOptions[newUnit];
+    }
+    return [];
+  }, [newUnit, applicantOptions]);
+
   const handleSelectOne = (id, checked) => {
     setSelectedIds(prev => {
         const newSet = new Set(prev);
@@ -121,7 +121,6 @@ export default function App() {
     }
   };
 
-  // --- 批次操作邏輯 ---
   const handleBatchAction = (actionType) => {
     if (selectedIds.size === 0) return;
 
@@ -133,10 +132,7 @@ export default function App() {
         
         if (hasAccountingReviewForms) {
             setModal({ 
-                isOpen: true, 
-                type: 'alert', 
-                alertType: 'warning', 
-                title: '操作受限', 
+                isOpen: true, type: 'alert', alertType: 'warning', title: '操作受限', 
                 message: '選取項目中包含「第一輪：會計室審核中」的單據。\n\n此階段必須填寫領回人才能進入下一步，無法使用批量推進。\n\n請改用「批量領回」功能。' 
             });
             return;
@@ -383,7 +379,6 @@ export default function App() {
     if (isFormOpen && !isEditMode) setPreviewSerialId(generateSerialId());
   }, [isFormOpen, forms, isEditMode]);
 
-  // Form Handlers
   const handleAddItem = () => setNewItems([...newItems, { id: Date.now(), subject: '', quantity: 1, measureUnit: '個', unitPrice: '' }]);
   const handleRemoveItem = (index) => { if (newItems.length > 1) { const updated = [...newItems]; updated.splice(index, 1); setNewItems(updated); } };
   const handleItemChange = (index, field, value) => { const updated = [...newItems]; updated[index][field] = value; setNewItems(updated); };
@@ -391,8 +386,6 @@ export default function App() {
   const resetForm = () => {
     setNewUnit(''); setNewApplicant(''); setNewSubsidy(''); setIsCustomSubsidy(false); setNewVendor(''); setIsCustomVendor(false); setNewGlobalRemark(''); setIsUrgent(false); setNewApplicationDate(''); 
     setNewItems([{ id: Date.now(), subject: '', quantity: 1, measureUnit: '個', unitPrice: '' }]);
-    
-    // 重置所有自訂模式狀態
     setIsEditMode(false); setEditingFormId(null); setPreviewSerialId('');
     setIsCustomUnit(false); setIsCustomApplicant(false); setIsCustomSubsidy(false); setIsCustomVendor(false);
   };
@@ -401,17 +394,16 @@ export default function App() {
 
   const handleEditClick = (form) => {
     setNewUnit(form.unit || ''); setNewApplicant(form.applicant || ''); setNewSubsidy(form.subsidy || ''); setNewVendor(form.vendor || ''); setNewGlobalRemark(form.globalRemark || ''); setNewApplicationDate(form.applicationDate || ''); setIsUrgent(form.isUrgent || false);
-    
     const items = (form.items || []).map((item, idx) => ({ ...item, id: item.id || Date.now() + idx }));
     setNewItems(items.length > 0 ? items : [{ id: Date.now(), subject: '', quantity: 1, measureUnit: '個', unitPrice: '' }]);
-    
     setPreviewSerialId(form.serialId); setEditingFormId(form.id); setIsEditMode(true);
-    
-    // ★★★ 修正編輯時的自動判斷邏輯 ★★★
-    if (form.unit && !unitOptions.includes(form.unit)) setIsCustomUnit(true); else setIsCustomUnit(false);
-    if (form.applicant && !applicantOptions.includes(form.applicant)) setIsCustomApplicant(true); else setIsCustomApplicant(false);
     if (form.subsidy && !projectOptions.includes(form.subsidy) && form.subsidy !== '無計畫 (公務)') setIsCustomSubsidy(true); else setIsCustomSubsidy(false);
     if (form.vendor && !vendorOptions.includes(form.vendor)) setIsCustomVendor(true); else setIsCustomVendor(false);
+    
+    if (form.unit && !unitOptions.includes(form.unit)) setIsCustomUnit(true); else setIsCustomUnit(false);
+    
+    const applicantsInUnit = applicantOptions[form.unit] || [];
+    if (form.applicant && !applicantsInUnit.includes(form.applicant)) setIsCustomApplicant(true); else setIsCustomApplicant(false);
 
     setIsFormOpen(true);
   };
@@ -429,15 +421,18 @@ export default function App() {
     try {
       const updateData = {};
       
-      // ★★★ 新增：單位與申請人的自動儲存邏輯 ★★★
       const trimmedUnit = newUnit.trim();
       if (trimmedUnit && !unitOptions.includes(trimmedUnit) && window.confirm(`是否將「${trimmedUnit}」加入常用單位？`)) {
           updateData.units = [...unitOptions, trimmedUnit];
       }
 
       const trimmedApplicant = newApplicant.trim();
-      if (trimmedApplicant && !applicantOptions.includes(trimmedApplicant) && window.confirm(`是否將「${trimmedApplicant}」加入常用申請人？`)) {
-          updateData.applicants = [...applicantOptions, trimmedApplicant];
+      const currentUnitApplicants = applicantOptions[trimmedUnit] || [];
+      if (trimmedApplicant && !currentUnitApplicants.includes(trimmedApplicant) && window.confirm(`是否將「${trimmedApplicant}」加入 ${trimmedUnit} 的常用名單？`)) {
+          updateData.applicants = {
+              ...applicantOptions,
+              [trimmedUnit]: [...currentUnitApplicants, trimmedApplicant]
+          };
       }
 
       const trimmedSubsidy = newSubsidy.trim();
@@ -659,10 +654,9 @@ export default function App() {
       <ExportModal isOpen={isExportModalOpen} onClose={handleCloseExportModal} onConfirm={handleConfirmExport} mode={exportMode} setMode={setExportMode} startDate={exportStartDate} setStartDate={setExportStartDate} endDate={exportEndDate} setEndDate={setExportEndDate} />
       {showExportFormatSelect && (<div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200"><div className="text-center mb-6"><div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600"><Download size={32} /></div><h3 className="text-2xl font-bold text-slate-800">請選擇匯出格式</h3><p className="text-slate-500 mt-2">請根據您的用途選擇適合的檔案格式</p></div><div className="space-y-3 mb-6"><button onClick={() => executeExport('json')} className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-blue-100 bg-blue-50/50 hover:bg-blue-100 hover:border-blue-300 transition-all group text-left"><div className="bg-white p-3 rounded-lg shadow-sm text-blue-600 group-hover:scale-110 transition-transform"><FileJson size={28} /></div><div><div className="font-bold text-slate-800 text-lg">系統備份 (JSON)</div><div className="text-sm text-slate-500">完整保留所有歷程紀錄</div></div></button><button onClick={() => executeExport('csv')} className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-slate-100 hover:bg-slate-50 hover:border-slate-300 transition-all group text-left"><div className="bg-white p-3 rounded-lg shadow-sm text-emerald-600 group-hover:scale-110 transition-transform"><FileSpreadsheet size={28} /></div><div><div className="font-bold text-slate-800 text-lg">一般報表 (CSV)</div><div className="text-sm text-slate-500">Excel 表格格式，僅供列印或檢視</div></div></button></div><button onClick={() => setShowExportFormatSelect(false)} className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">取消</button></div></div>)}
       {isFormOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-blue-200"><div className="flex justify-between items-center mb-6 pb-4 border-b"><h3 className="font-bold text-lg flex items-center gap-2 text-blue-800">{isEditMode ? <Edit2 size={20} /> : <Box size={20} />} {isEditMode ? '修改申請單' : '立案申請單'}</h3><div className="flex items-center gap-3"><div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs font-mono border border-blue-100">流水號：{previewSerialId}</div><button onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button></div></div><form onSubmit={handleFormSubmit} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-12 gap-4"><div className="col-span-12 md:col-span-3"><label className="block text-xs font-bold text-slate-500 mb-1">申請單位 *</label>
-      {/* ★★★ 1. 單位與申請人欄位樣式更新：改為 SearchableSelect (可搜尋/可自訂) ★★★ */}
       {isCustomUnit ? (
           <div className="flex gap-2">
-            <input type="text" value={newUnit} onChange={e => setNewUnit(e.target.value)} placeholder="請輸入單位名稱..." className="w-full p-2 border rounded-lg h-12" autoFocus />
+            <input type="text" value={newUnit} onChange={e => setNewUnit(e.target.value)} placeholder="請輸入單位名稱..." className="w-full p-2 border rounded-lg h-12 text-lg" autoFocus />
             <button type="button" onClick={() => { setIsCustomUnit(false); setNewUnit(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button>
           </div>
       ) : (
@@ -671,13 +665,13 @@ export default function App() {
       </div><div className="col-span-12 md:col-span-3"><label className="block text-xs font-bold text-slate-500 mb-1">申請人 *</label>
       {isCustomApplicant ? (
           <div className="flex gap-2">
-            <input type="text" value={newApplicant} onChange={e => setNewApplicant(e.target.value)} placeholder="請輸入申請人..." className="w-full p-2 border rounded-lg h-12" autoFocus />
+            <input type="text" value={newApplicant} onChange={e => setNewApplicant(e.target.value)} placeholder="請輸入申請人..." className="w-full p-2 border rounded-lg h-12 text-lg" autoFocus />
             <button type="button" onClick={() => { setIsCustomApplicant(false); setNewApplicant(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button>
           </div>
       ) : (
-          <SearchableSelect options={applicantOptions} value={newApplicant} onChange={(val) => setNewApplicant(val)} placeholder="選擇或搜尋申請人..." onCustomClick={(val) => { setIsCustomApplicant(true); setNewApplicant(val || ''); }} />
+          <SearchableSelect options={availableApplicants} value={newApplicant} onChange={(val) => setNewApplicant(val)} placeholder="選擇或搜尋申請人..." onCustomClick={(val) => { setIsCustomApplicant(true); setNewApplicant(val || ''); }} />
       )}
-      </div><div className="col-span-12 md:col-span-6"><label className="block text-xs font-bold text-slate-500 mb-1">計畫補助 (選填)</label>{isCustomSubsidy ? (<div className="flex gap-2"><input type="text" value={newSubsidy} onChange={e => setNewSubsidy(e.target.value)} placeholder="請輸入計畫名稱..." className="w-full p-2 border rounded-lg h-12" autoFocus /><button type="button" onClick={() => { setIsCustomSubsidy(false); setNewSubsidy(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={projectOptions} value={newSubsidy} onChange={(val) => setNewSubsidy(val)} placeholder="選擇或搜尋計畫..." onCustomClick={(val) => { setIsCustomSubsidy(true); setNewSubsidy(val || ''); }} />)}</div></div><div className="flex flex-col md:flex-row gap-4"><div className="w-full md:w-[70%]"><label className="block text-xs font-bold text-slate-500 mb-1">廠商 (選填)</label>{isCustomVendor ? (<div className="flex gap-2"><input type="text" value={newVendor} onChange={e => setNewVendor(e.target.value)} placeholder="請輸入廠商名稱..." className="w-full p-2 border rounded-lg h-12" autoFocus /><button type="button" onClick={() => { setIsCustomVendor(false); setNewVendor(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={vendorOptions} value={newVendor} onChange={(val) => setNewVendor(val)} placeholder="選擇或搜尋廠商..." onCustomClick={(val) => { setIsCustomVendor(true); setNewVendor(val || ''); }} />)}</div><div className="w-full md:w-[30%]"><label className="block text-xs font-bold text-slate-500 mb-1">申請單日期 (選填)</label><MinguoDateInput value={newApplicationDate} onChange={setNewApplicationDate} /></div></div><div><label className="block text-xs font-bold text-slate-500 mb-1">案件背景備註 (選填)</label><input type="text" placeholder="時程或其他重要備註" value={newGlobalRemark} onChange={e => setNewGlobalRemark(e.target.value)} className="w-full p-2 border rounded-lg h-12" /></div><div className="flex items-center"><label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2 rounded border border-red-100 h-12"><input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="w-5 h-5 text-red-600 rounded" /><span className={`text-sm font-bold ${isUrgent?'text-red-600':'text-slate-500'}`}>{isUrgent?'🔥 設定為速件':'一般案件'}</span></label></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><ShoppingCart size={16} /> 購買項目清單</label><div className="space-y-3">{newItems.map((item, index) => (<div key={item.id} className="group relative flex flex-col md:flex-row gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-blue-300"><div className="hidden md:flex items-center justify-center w-6 text-slate-400 font-mono text-sm self-center">{index + 1}.</div><div className="flex-1"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">品項名稱</label><textarea placeholder="品項名稱 *" value={item.subject} onChange={e => handleItemChange(index, 'subject', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300 resize-y min-h-[52px]" rows={1} required /></div><div className="flex gap-2 w-full md:w-auto"><div className="w-28 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">數量</label><input type="number" placeholder="數量 *" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div><div className="w-20 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單位</label><input type="text" placeholder="單位" value={item.measureUnit} onChange={e => handleItemChange(index, 'measureUnit', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none" /></div><div className="flex-1 md:w-40"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單價</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span><input type="number" placeholder="單價 *" value={item.unitPrice} onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} className="w-full pl-6 pr-3 py-3 border border-slate-300 rounded-lg text-right text-base focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div></div></div><div className="flex items-center justify-between md:justify-end gap-4 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto"><div className="md:hidden text-sm text-slate-500 font-medium">小計</div><div className="text-lg font-bold text-blue-600 w-24 text-right">${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}</div><button type="button" onClick={() => handleRemoveItem(index)} className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`} title="移除此項目"><X size={20} /></button></div></div>))}</div><div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200"><button type="button" onClick={handleAddItem} className="text-sm text-blue-600 flex items-center gap-1 font-bold hover:underline"><Plus size={16} /> 新增品項</button><div className="text-xl font-black">總預算: <span className="text-blue-600">${totalAmount.toLocaleString()}</span></div></div></div><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg h-12" disabled={isSubmitting}>取消</button><button type="submit" className={`px-8 py-2 text-white rounded-lg font-bold shadow-md flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} h-12`} disabled={isSubmitting}>{isSubmitting ? (<><Loader2 className="animate-spin" size={20} />處理中...</>) : (isEditMode ? '儲存修改' : '確認立案 (並新增下一筆)')}</button></div></form></div></div>)}
+      </div><div className="col-span-12 md:col-span-6"><label className="block text-xs font-bold text-slate-500 mb-1">計畫補助 (選填)</label>{isCustomSubsidy ? (<div className="flex gap-2"><input type="text" value={newSubsidy} onChange={e => setNewSubsidy(e.target.value)} placeholder="請輸入計畫名稱..." className="w-full p-2 border rounded-lg h-12 text-lg" autoFocus /><button type="button" onClick={() => { setIsCustomSubsidy(false); setNewSubsidy(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={projectOptions} value={newSubsidy} onChange={(val) => setNewSubsidy(val)} placeholder="選擇或搜尋計畫..." onCustomClick={(val) => { setIsCustomSubsidy(true); setNewSubsidy(val || ''); }} />)}</div></div><div className="flex flex-col md:flex-row gap-4"><div className="w-full md:w-[70%]"><label className="block text-xs font-bold text-slate-500 mb-1">廠商 (選填)</label>{isCustomVendor ? (<div className="flex gap-2"><input type="text" value={newVendor} onChange={e => setNewVendor(e.target.value)} placeholder="請輸入廠商名稱..." className="w-full p-2 border rounded-lg h-12 text-lg" autoFocus /><button type="button" onClick={() => { setIsCustomVendor(false); setNewVendor(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={vendorOptions} value={newVendor} onChange={(val) => setNewVendor(val)} placeholder="選擇或搜尋廠商..." onCustomClick={(val) => { setIsCustomVendor(true); setNewVendor(val || ''); }} />)}</div><div className="w-full md:w-[30%]"><label className="block text-xs font-bold text-slate-500 mb-1">申請單日期 (選填)</label><MinguoDateInput value={newApplicationDate} onChange={setNewApplicationDate} /></div></div><div><label className="block text-xs font-bold text-slate-500 mb-1">案件背景備註 (選填)</label><input type="text" placeholder="時程或其他重要備註" value={newGlobalRemark} onChange={e => setNewGlobalRemark(e.target.value)} className="w-full p-2 border rounded-lg h-12 text-lg" /></div><div className="flex items-center"><label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2 rounded border border-red-100 h-12"><input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="w-5 h-5 text-red-600 rounded" /><span className={`text-sm font-bold ${isUrgent?'text-red-600':'text-slate-500'}`}>{isUrgent?'🔥 設定為速件':'一般案件'}</span></label></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><ShoppingCart size={16} /> 購買項目清單</label><div className="space-y-3">{newItems.map((item, index) => (<div key={item.id} className="group relative flex flex-col md:flex-row gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-blue-300"><div className="hidden md:flex items-center justify-center w-6 text-slate-400 font-mono text-sm self-center">{index + 1}.</div><div className="flex-1"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">品項名稱</label><textarea placeholder="品項名稱 *" value={item.subject} onChange={e => handleItemChange(index, 'subject', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300 resize-y min-h-[52px]" rows={1} required /></div><div className="flex gap-2 w-full md:w-auto"><div className="w-28 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">數量</label><input type="number" placeholder="數量 *" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div><div className="w-20 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單位</label><input type="text" placeholder="單位" value={item.measureUnit} onChange={e => handleItemChange(index, 'measureUnit', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div><div className="flex-1 md:w-40"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單價</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span><input type="number" placeholder="單價 *" value={item.unitPrice} onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} className="w-full pl-6 pr-3 py-3 border border-slate-300 rounded-lg text-right text-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div></div></div><div className="flex items-center justify-between md:justify-end gap-4 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto"><div className="md:hidden text-sm text-slate-500 font-medium">小計</div><div className="text-lg font-bold text-blue-600 w-24 text-right">${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}</div><button type="button" onClick={() => handleRemoveItem(index)} className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`} title="移除此項目"><X size={20} /></button></div></div>))}</div><div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200"><button type="button" onClick={handleAddItem} className="text-sm text-blue-600 flex items-center gap-1 font-bold hover:underline"><Plus size={16} /> 新增品項</button><div className="text-xl font-black">總預算: <span className="text-blue-600">${totalAmount.toLocaleString()}</span></div></div></div><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg h-12" disabled={isSubmitting}>取消</button><button type="submit" className={`px-8 py-2 text-white rounded-lg font-bold shadow-md flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} h-12`} disabled={isSubmitting}>{isSubmitting ? (<><Loader2 className="animate-spin" size={20} />處理中...</>) : (isEditMode ? '儲存修改' : '確認立案 (並新增下一筆)')}</button></div></form></div></div>)}
 
       <div className="max-w-7xl mx-auto p-4 md:p-6 text-center">
         {/* Header */}
