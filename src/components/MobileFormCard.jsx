@@ -31,7 +31,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
   };
 
   return (
-    <div className={`rounded-xl border shadow-sm transition-all duration-200 ${isExpanded ? 'ring-1' : ''} ${form.isUrgent ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'} ${isExpanded && form.isUrgent ? 'ring-red-300' : (isExpanded ? 'border-blue-400 ring-blue-100' : '')} ${selected ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}>
+    <div className={`bg-white rounded-xl border shadow-sm transition-all duration-200 ${isExpanded ? 'border-blue-400 ring-1 ring-blue-100' : 'border-slate-200'} ${selected ? 'bg-blue-50/30 ring-1 ring-blue-300 border-blue-300' : ''} ${form.isUrgent ? 'bg-red-50' : ''}`}>
       <div className="p-4">
         <div className="flex gap-3">
           <div className="pt-1">
@@ -47,7 +47,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
             <div className="flex justify-between items-start gap-3">
               <div className="flex-1 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`font-mono text-xs px-2 py-0.5 rounded border ${form.isUrgent ? 'bg-white/50 text-red-800 border-red-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                  <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                     {form.serialId}
                   </span>
                   {form.isUrgent && (
@@ -100,7 +100,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
           </button>
           
           <div className="py-3 space-y-3 text-base">
-            <div className={`grid grid-cols-2 gap-3 p-3 rounded-lg pr-12 ${form.isUrgent ? 'bg-red-100/50' : 'bg-slate-50'}`}>
+            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
               <div>
                 <span className="text-xs text-slate-400 block mb-1">申請日期</span>
                 <span className="font-medium text-slate-800">{form.applicationDate ? form.applicationDate.replace(/-/g, '/') : '-'}</span>

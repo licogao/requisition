@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Save, Settings, Layers, Briefcase, Users, AlertCircle, Edit2, Check } from 'lucide-react'; // ★ 新增 Edit2, Check
+import { X, Plus, Trash2, Save, Settings, Layers, Briefcase, Users, AlertCircle, Edit2, Check, User } from 'lucide-react'; // ★ 引入 User 圖示
 import { doc, updateDoc } from 'firebase/firestore';
 
 const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAlert, openConfirm }) => {
   const [activeTab, setActiveTab] = useState('units');
-  const [localData, setLocalData] = useState({ units: [], projects: [], vendors: [] });
+  const [localData, setLocalData] = useState({ units: [], projects: [], vendors: [], applicants: [] });
   const [newItem, setNewItem] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   
-  // 編輯狀態
   const [editingIndex, setEditingIndex] = useState(null);
   const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
     if (isOpen && initialData) {
-      setLocalData(initialData);
+      setLocalData({ ...initialData, applicants: initialData.applicantOptions || initialData.applicants || [] });
     }
   }, [isOpen, initialData]);
 
@@ -22,19 +21,21 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
 
   const tabs = [
     { id: 'units', label: '申請單位', icon: <Layers size={18} /> },
+    { id: 'applicants', label: '申請人', icon: <User size={18} /> },
     { id: 'projects', label: '計畫來源', icon: <Briefcase size={18} /> },
     { id: 'vendors', label: '常用廠商', icon: <Users size={18} /> },
   ];
 
   const handleAddItem = () => {
     if (!newItem.trim()) return;
-    if (localData[activeTab].includes(newItem.trim())) {
+    const currentList = localData[activeTab] || [];
+    if (currentList.includes(newItem.trim())) {
       openAlert('重複項目', '該項目已存在清單中。', 'warning');
       return;
     }
     setLocalData(prev => ({
       ...prev,
-      [activeTab]: [...prev[activeTab], newItem.trim()]
+      [activeTab]: [...(prev[activeTab] || []), newItem.trim()]
     }));
     setNewItem('');
   };
@@ -46,30 +47,25 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
     }));
   };
 
-  // 開始編輯
   const startEdit = (index, value) => {
     setEditingIndex(index);
     setEditValue(value);
   };
 
-  // 取消編輯
   const cancelEdit = () => {
     setEditingIndex(null);
     setEditValue('');
   };
 
-  // 儲存編輯
   const saveEdit = (index) => {
     if (!editValue.trim()) return;
     
-    // 檢查是否有變更
     const originalValue = localData[activeTab][index];
     if (editValue.trim() === originalValue) {
         cancelEdit();
         return;
     }
 
-    // 檢查是否重複 (排除自己)
     const otherItems = localData[activeTab].filter((_, i) => i !== index);
     if (otherItems.includes(editValue.trim())) {
         openAlert('重複項目', '該名稱已存在。', 'warning');
@@ -137,6 +133,7 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col p-4 md:p-6">
+          
           <div className="flex flex-col sm:flex-row gap-2 mb-4 shrink-0">
             <input 
               type="text" 
@@ -156,7 +153,7 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
           </div>
 
           <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50 p-2 space-y-2">
-            {localData[activeTab]?.length === 0 ? (
+            {(localData[activeTab] || []).length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 min-h-[200px]">
                 <AlertCircle size={32} className="opacity-20" />
                 <p>目前沒有資料，請新增項目</p>
@@ -166,7 +163,6 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
                 <div key={index} className={`flex justify-between items-center p-3 bg-white rounded-lg border shadow-sm transition-all ${editingIndex === index ? 'border-blue-500 ring-1 ring-blue-200' : 'border-slate-200 hover:border-blue-300'}`}>
                   
                   {editingIndex === index ? (
-                    /* 編輯模式 */
                     <div className="flex flex-1 gap-2 items-center">
                         <input 
                             type="text" 
@@ -183,7 +179,6 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
                         <button onClick={cancelEdit} className="p-1.5 bg-slate-100 text-slate-500 rounded hover:bg-slate-200"><X size={18} /></button>
                     </div>
                   ) : (
-                    /* 顯示模式 */
                     <>
                         <span className="font-medium text-slate-700 break-all pr-2 flex-1">{item}</span>
                         <div className="flex gap-1 shrink-0">

@@ -3,7 +3,7 @@ import {
   collection, addDoc, updateDoc, doc, query, deleteDoc, setDoc, writeBatch, getDocs, where, serverTimestamp, limit, orderBy 
 } from 'firebase/firestore'; 
 import { 
-  Plus, Search, Calendar, Flame, Filter, Edit2, Upload, Download, LogOut, FileText, Clock, FolderCog, ShoppingCart, X, Loader2, Settings, Box, Wrench, Activity, FileJson, FileSpreadsheet, Cloud, CheckSquare, ArrowRight, RotateCcw, UserCheck
+  Plus, Search, Calendar, Flame, Filter, Edit2, Upload, Download, LogOut, FileText, Clock, FolderCog, ShoppingCart, X, Loader2, Settings, Box, Wrench, Activity, FileJson, FileSpreadsheet, Cloud, CheckSquare, ArrowRight, RotateCcw, UserCheck, CheckCheck 
 } from 'lucide-react';
 
 import { db, appId } from './firebase'; 
@@ -26,6 +26,7 @@ import GlobalModal from './components/GlobalModal';
 import FormRow from './components/FormRow';
 import MobileFormCard from './components/MobileFormCard'; 
 import LogViewerModal from './components/LogViewerModal'; 
+
 import AppHeader from './components/AppHeader';
 import FilterBar from './components/FilterBar';
 
@@ -33,7 +34,7 @@ const ADMIN_EMAILS = [`268${DEFAULT_DOMAIN}`];
 
 export default function App() {
   const { user, loading: authLoading, error: authError, login: handleLogin, logout: handleLogout } = useAuth();
-  const { unitOptions, projectOptions, vendorOptions } = useSettings(user);
+  const { unitOptions, projectOptions, vendorOptions, applicantOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
   // --- UI State ---
@@ -52,7 +53,6 @@ export default function App() {
   const [filterEndDate, setFilterEndDate] = useState('');     
   const [showUrgentOnly, setShowUrgentOnly] = useState(false);
   
-  // 多選狀態
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   const [expandedId, setExpandedId] = useState(null);
@@ -81,8 +81,13 @@ export default function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingFormId, setEditingFormId] = useState(null);
+  
+  // 自訂輸入模式狀態
   const [isCustomSubsidy, setIsCustomSubsidy] = useState(false);
   const [isCustomVendor, setIsCustomVendor] = useState(false);
+  // ★★★ 新增：單位與申請人的自訂狀態 ★★★
+  const [isCustomUnit, setIsCustomUnit] = useState(false);
+  const [isCustomApplicant, setIsCustomApplicant] = useState(false);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSearchingCloud, setIsSearchingCloud] = useState(false); 
@@ -152,7 +157,7 @@ export default function App() {
         }
 
         setModal({
-            isOpen: true, type: 'action', title: `批量退回 (${validTargets.length} 筆)`, message: `將退回 ${validTargets.length} 筆單據。\n(已自動略過 ${targets.length - validTargets.length} 筆初始階段單據)\n\n請輸入退回原因`, showNoteInput: true, noteRequired: true,
+            isOpen: true, type: 'action', title: `批量退回 (${validTargets.length} 筆)`, message: `將退回 ${validTargets.length} 筆單據。\n(已自動略過 ${targets.length - validTargets.length} 筆初始階段單據)\n\n請輸入退回原因`, showNoteInput: true, noteRequired: true, alertType: 'danger',
             onConfirm: async ({ note }) => {
                 await executeBatchUpdate(validTargets, 'revert', note);
             }
@@ -169,6 +174,20 @@ export default function App() {
             isOpen: true, type: 'action', title: `批量登錄領回 (${validTargets.length} 筆)`, message: `將對 ${validTargets.length} 筆符合資格的單據登錄領回人，並自動推進至下一流程。\n\n(已自動略過 ${targets.length - validTargets.length} 筆狀態不符的單據)`, showPickupInput: true,
             onConfirm: async ({ pickupName }) => {
                 await executeBatchUpdate(validTargets, 'receiver', null, pickupName);
+            }
+        });
+    } else if (actionType === 'direct_complete') {
+        const validTargets = targets.filter(f => STATUS_STEPS[f.status]?.phase === 1 && f.status !== 'P2_RETURNED');
+        
+        if (validTargets.length === 0) {
+            setModal({ isOpen: true, type: 'alert', alertType: 'warning', title: '無法執行', message: '此功能僅適用於「第一輪」的單據。\n\n(只有第一輪單據可以直接跳過中間流程結案，且不包含已領回的單據)' });
+            return;
+        }
+
+        setModal({
+            isOpen: true, type: 'action', title: `批量直接結案 (${validTargets.length} 筆)`, message: `⚠️ 即將對 ${validTargets.length} 筆第一輪單據執行「上下核章直接結案」。\n\n這些單據將跳過中間流程，直接變更為「已結案」。\n(已自動略過 ${targets.length - validTargets.length} 筆非第一輪或不符合條件的單據)`,
+            onConfirm: async ({ note }) => {
+                await executeBatchUpdate(validTargets, 'direct_complete', note);
             }
         });
     }
@@ -230,6 +249,19 @@ export default function App() {
                     };
                 }
             }
+        } else if (type === 'direct_complete') {
+            const targetStatus = 'COMPLETED'; 
+            updateData = {
+                status: targetStatus,
+                logs: [...(form.logs || []), { 
+                    status: targetStatus, 
+                    timestamp, 
+                    note: `上下核章直接結案 [批量操作${note ? ': ' + note : ''}]`, 
+                    operator: getOperatorName(user) 
+                }],
+                updatedAt: serverTimestamp(),
+                [`time_${targetStatus}`]: timestamp
+            };
         }
 
         if (updateData) {
@@ -243,7 +275,7 @@ export default function App() {
     if (successCount > 0) {
         await batch.commit();
         
-        const logType = (type === 'advance' || type === 'revert' || type === 'receiver') 
+        const logType = (type === 'advance' || type === 'revert' || type === 'receiver' || type === 'direct_complete') 
             ? LOG_TYPES.STATUS_CHANGE 
             : LOG_TYPES.UPDATE;
 
@@ -297,7 +329,6 @@ export default function App() {
 
   const filteredForms = useMemo(() => {
     return forms.filter(form => {
-      // ★★★ 修正重點：若項目被勾選，則強制顯示 (忽略篩選條件) ★★★
       if (selectedIds.has(form.id)) return true;
 
       if (filterMonth !== 'all') {
@@ -323,13 +354,13 @@ export default function App() {
       );
       if (!match) return false;
       
-      if (filterPhase === 'phase1') return STATUS_STEPS[form.status]?.phase === 1 && form.status !== 'P1_RETURNED';
-      if (filterPhase === 'phase2') return (STATUS_STEPS[form.status]?.phase === 2 || form.status === 'P1_RETURNED') && form.status !== 'COMPLETED';
+      if (filterPhase === 'phase1') return STATUS_STEPS[form.status]?.phase === 1 && form.status !== 'P1_RETURNED' && form.status !== 'P2_RETURNED';
+      if (filterPhase === 'phase2') return (STATUS_STEPS[form.status]?.phase === 2 || form.status === 'P1_RETURNED' || form.status === 'P2_RETURNED') && form.status !== 'COMPLETED';
       if (filterPhase === 'phase3') return STATUS_STEPS[form.status]?.phase === 3;
       
       return true;
     });
-  }, [forms, searchTerm, filterPhase, filterMonth, showUrgentOnly, filterVendor, filterStartDate, filterEndDate, selectedIds]); // ★ 加入 selectedIds
+  }, [forms, searchTerm, filterPhase, filterMonth, showUrgentOnly, filterVendor, filterStartDate, filterEndDate, selectedIds]); 
 
   const generateSerialId = () => {
     const today = new Date();
@@ -360,7 +391,10 @@ export default function App() {
   const resetForm = () => {
     setNewUnit(''); setNewApplicant(''); setNewSubsidy(''); setIsCustomSubsidy(false); setNewVendor(''); setIsCustomVendor(false); setNewGlobalRemark(''); setIsUrgent(false); setNewApplicationDate(''); 
     setNewItems([{ id: Date.now(), subject: '', quantity: 1, measureUnit: '個', unitPrice: '' }]);
+    
+    // 重置所有自訂模式狀態
     setIsEditMode(false); setEditingFormId(null); setPreviewSerialId('');
+    setIsCustomUnit(false); setIsCustomApplicant(false); setIsCustomSubsidy(false); setIsCustomVendor(false);
   };
 
   const handleOpenCreate = () => { resetForm(); setIsEditMode(false); setIsFormOpen(true); };
@@ -373,6 +407,9 @@ export default function App() {
     
     setPreviewSerialId(form.serialId); setEditingFormId(form.id); setIsEditMode(true);
     
+    // ★★★ 修正編輯時的自動判斷邏輯 ★★★
+    if (form.unit && !unitOptions.includes(form.unit)) setIsCustomUnit(true); else setIsCustomUnit(false);
+    if (form.applicant && !applicantOptions.includes(form.applicant)) setIsCustomApplicant(true); else setIsCustomApplicant(false);
     if (form.subsidy && !projectOptions.includes(form.subsidy) && form.subsidy !== '無計畫 (公務)') setIsCustomSubsidy(true); else setIsCustomSubsidy(false);
     if (form.vendor && !vendorOptions.includes(form.vendor)) setIsCustomVendor(true); else setIsCustomVendor(false);
 
@@ -390,32 +427,31 @@ export default function App() {
 
     setIsSubmitting(true);
     try {
-      let updatedProjects = [...projectOptions];
-      let projectsChanged = false;
+      const updateData = {};
+      
+      // ★★★ 新增：單位與申請人的自動儲存邏輯 ★★★
+      const trimmedUnit = newUnit.trim();
+      if (trimmedUnit && !unitOptions.includes(trimmedUnit) && window.confirm(`是否將「${trimmedUnit}」加入常用單位？`)) {
+          updateData.units = [...unitOptions, trimmedUnit];
+      }
+
+      const trimmedApplicant = newApplicant.trim();
+      if (trimmedApplicant && !applicantOptions.includes(trimmedApplicant) && window.confirm(`是否將「${trimmedApplicant}」加入常用申請人？`)) {
+          updateData.applicants = [...applicantOptions, trimmedApplicant];
+      }
+
       const trimmedSubsidy = newSubsidy.trim();
-      if (trimmedSubsidy && !projectOptions.includes(trimmedSubsidy) && trimmedSubsidy !== '無計畫 (公務)') {
-        if (window.confirm(`檢測到新的計畫來源：「${trimmedSubsidy}」，是否要加入常用清單？`)) {
-          updatedProjects.push(trimmedSubsidy);
-          projectsChanged = true;
-        }
+      if (trimmedSubsidy && !projectOptions.includes(trimmedSubsidy) && trimmedSubsidy !== '無計畫 (公務)' && window.confirm(`是否將「${trimmedSubsidy}」加入常用計畫？`)) {
+          updateData.projects = [...projectOptions, trimmedSubsidy];
       }
-
-      let updatedVendors = [...vendorOptions];
-      let vendorsChanged = false;
+      
       const trimmedVendor = newVendor.trim();
-      if (trimmedVendor && !vendorOptions.includes(trimmedVendor)) {
-        if (window.confirm(`檢測到新的廠商：「${trimmedVendor}」，是否要加入常用清單？`)) {
-          updatedVendors.push(trimmedVendor);
-          vendorsChanged = true;
-        }
+      if (trimmedVendor && !vendorOptions.includes(trimmedVendor) && window.confirm(`是否將「${trimmedVendor}」加入常用廠商？`)) {
+          updateData.vendors = [...vendorOptions, trimmedVendor];
       }
 
-      if (projectsChanged || vendorsChanged) {
-        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'school_settings', 'config1');
-        const updateData = {};
-        if (projectsChanged) updateData.projects = updatedProjects;
-        if (vendorsChanged) updateData.vendors = updatedVendors;
-        await setDoc(settingsRef, updateData, { merge: true });
+      if (Object.keys(updateData).length > 0) {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_settings', 'config1'), updateData, { merge: true });
       }
 
       const timestamp = new Date().toISOString();
@@ -619,10 +655,29 @@ export default function App() {
       <ManageCompletedModal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} onExport={() => { const hasCompletedForms = forms.some(f => STATUS_STEPS[f.status]?.phase === 3); if (!hasCompletedForms) { openAlert('匯出失敗', '目前沒有已結案的資料可供備份。', 'danger'); return; } setExportMode('completed'); setShowExportFormatSelect(true); }} statusSteps={STATUS_STEPS} />
       <DebugClearModal isOpen={isDebugClearOpen} onClose={() => setIsDebugClearOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} />
       <LogViewerModal isOpen={isLogViewerOpen} onClose={() => setIsLogViewerOpen(false)} db={db} appId={appId} />
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialData={{ units: unitOptions, projects: projectOptions, vendors: vendorOptions }} onSave={() => {}} db={db} appId={appId} openAlert={openAlert} openConfirm={openConfirm} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialData={{ units: unitOptions, projects: projectOptions, vendors: vendorOptions, applicants: applicantOptions }} onSave={() => {}} db={db} appId={appId} openAlert={openAlert} openConfirm={openConfirm} />
       <ExportModal isOpen={isExportModalOpen} onClose={handleCloseExportModal} onConfirm={handleConfirmExport} mode={exportMode} setMode={setExportMode} startDate={exportStartDate} setStartDate={setExportStartDate} endDate={exportEndDate} setEndDate={setExportEndDate} />
       {showExportFormatSelect && (<div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200"><div className="text-center mb-6"><div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600"><Download size={32} /></div><h3 className="text-2xl font-bold text-slate-800">請選擇匯出格式</h3><p className="text-slate-500 mt-2">請根據您的用途選擇適合的檔案格式</p></div><div className="space-y-3 mb-6"><button onClick={() => executeExport('json')} className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-blue-100 bg-blue-50/50 hover:bg-blue-100 hover:border-blue-300 transition-all group text-left"><div className="bg-white p-3 rounded-lg shadow-sm text-blue-600 group-hover:scale-110 transition-transform"><FileJson size={28} /></div><div><div className="font-bold text-slate-800 text-lg">系統備份 (JSON)</div><div className="text-sm text-slate-500">完整保留所有歷程紀錄</div></div></button><button onClick={() => executeExport('csv')} className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-slate-100 hover:bg-slate-50 hover:border-slate-300 transition-all group text-left"><div className="bg-white p-3 rounded-lg shadow-sm text-emerald-600 group-hover:scale-110 transition-transform"><FileSpreadsheet size={28} /></div><div><div className="font-bold text-slate-800 text-lg">一般報表 (CSV)</div><div className="text-sm text-slate-500">Excel 表格格式，僅供列印或檢視</div></div></button></div><button onClick={() => setShowExportFormatSelect(false)} className="w-full py-3 text-slate-400 font-bold hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">取消</button></div></div>)}
-      {isFormOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-blue-200"><div className="flex justify-between items-center mb-6 pb-4 border-b"><h3 className="font-bold text-lg flex items-center gap-2 text-blue-800">{isEditMode ? <Edit2 size={20} /> : <Box size={20} />} {isEditMode ? '修改申請單' : '立案申請單'}</h3><div className="flex items-center gap-3"><div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs font-mono border border-blue-100">流水號：{previewSerialId}</div><button onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button></div></div><form onSubmit={handleFormSubmit} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-12 gap-4"><div className="col-span-12 md:col-span-3"><label className="block text-xs font-bold text-slate-500 mb-1">申請單位 *</label><select value={newUnit} onChange={e => setNewUnit(e.target.value)} className="w-full p-2 border rounded-lg bg-white h-12" required><option value="" disabled>選擇處室...</option>{unitOptions.map((u, i) => <option key={i} value={u}>{String(u)}</option>)}</select></div><div className="col-span-12 md:col-span-3"><label className="block text-xs font-bold text-slate-500 mb-1">申請人 *</label><input type="text" placeholder="姓名" value={newApplicant} onChange={e => setNewApplicant(e.target.value)} className="w-full p-2 border rounded-lg h-12" required /></div><div className="col-span-12 md:col-span-6"><label className="block text-xs font-bold text-slate-500 mb-1">計畫補助 (選填)</label>{isCustomSubsidy ? (<div className="flex gap-2"><input type="text" value={newSubsidy} onChange={e => setNewSubsidy(e.target.value)} placeholder="請輸入計畫名稱..." className="w-full p-2 border rounded-lg h-12" autoFocus /><button type="button" onClick={() => { setIsCustomSubsidy(false); setNewSubsidy(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={projectOptions} value={newSubsidy} onChange={(val) => setNewSubsidy(val)} placeholder="選擇或搜尋計畫..." onCustomClick={(val) => { setIsCustomSubsidy(true); setNewSubsidy(val || ''); }} />)}</div></div><div className="flex flex-col md:flex-row gap-4"><div className="w-full md:w-[70%]"><label className="block text-xs font-bold text-slate-500 mb-1">廠商 (選填)</label>{isCustomVendor ? (<div className="flex gap-2"><input type="text" value={newVendor} onChange={e => setNewVendor(e.target.value)} placeholder="請輸入廠商名稱..." className="w-full p-2 border rounded-lg h-12" autoFocus /><button type="button" onClick={() => { setIsCustomVendor(false); setNewVendor(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={vendorOptions} value={newVendor} onChange={(val) => setNewVendor(val)} placeholder="選擇或搜尋廠商..." onCustomClick={(val) => { setIsCustomVendor(true); setNewVendor(val || ''); }} />)}</div><div className="w-full md:w-[30%]"><label className="block text-xs font-bold text-slate-500 mb-1">申請單日期 (選填)</label><MinguoDateInput value={newApplicationDate} onChange={setNewApplicationDate} /></div></div><div><label className="block text-xs font-bold text-slate-500 mb-1">案件背景備註 (選填)</label><input type="text" placeholder="時程或其他重要備註" value={newGlobalRemark} onChange={e => setNewGlobalRemark(e.target.value)} className="w-full p-2 border rounded-lg h-12" /></div><div className="flex items-center"><label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2 rounded border border-red-100 h-12"><input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="w-5 h-5 text-red-600 rounded" /><span className={`text-sm font-bold ${isUrgent?'text-red-600':'text-slate-500'}`}>{isUrgent?'🔥 設定為速件':'一般案件'}</span></label></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><ShoppingCart size={16} /> 購買項目清單</label><div className="space-y-3">{newItems.map((item, index) => (<div key={item.id} className="group relative flex flex-col md:flex-row gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-blue-300"><div className="hidden md:flex items-center justify-center w-6 text-slate-400 font-mono text-sm self-center">{index + 1}.</div><div className="flex-1"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">品項名稱</label><input type="text" placeholder="品項名稱 *" value={item.subject} onChange={e => handleItemChange(index, 'subject', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300" required /></div><div className="flex gap-2 w-full md:w-auto"><div className="w-28 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">數量</label><input type="number" placeholder="數量 *" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div><div className="w-20 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單位</label><input type="text" placeholder="單位" value={item.measureUnit} onChange={e => handleItemChange(index, 'measureUnit', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none" /></div><div className="flex-1 md:w-40"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單價</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span><input type="number" placeholder="單價 *" value={item.unitPrice} onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} className="w-full pl-6 pr-3 py-3 border border-slate-300 rounded-lg text-right text-base focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div></div></div><div className="flex items-center justify-between md:justify-end gap-4 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto"><div className="md:hidden text-sm text-slate-500 font-medium">小計</div><div className="text-lg font-bold text-blue-600 w-24 text-right">${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}</div><button type="button" onClick={() => handleRemoveItem(index)} className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`} title="移除此項目"><X size={20} /></button></div></div>))}</div><div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200"><button type="button" onClick={handleAddItem} className="text-sm text-blue-600 flex items-center gap-1 font-bold hover:underline"><Plus size={16} /> 新增品項</button><div className="text-xl font-black">總預算: <span className="text-blue-600">${totalAmount.toLocaleString()}</span></div></div></div><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg h-12" disabled={isSubmitting}>取消</button><button type="submit" className={`px-8 py-2 text-white rounded-lg font-bold shadow-md flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} h-12`} disabled={isSubmitting}>{isSubmitting ? (<><Loader2 className="animate-spin" size={20} />處理中...</>) : (isEditMode ? '儲存修改' : '確認立案 (並新增下一筆)')}</button></div></form></div></div>)}
+      {isFormOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-blue-200"><div className="flex justify-between items-center mb-6 pb-4 border-b"><h3 className="font-bold text-lg flex items-center gap-2 text-blue-800">{isEditMode ? <Edit2 size={20} /> : <Box size={20} />} {isEditMode ? '修改申請單' : '立案申請單'}</h3><div className="flex items-center gap-3"><div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs font-mono border border-blue-100">流水號：{previewSerialId}</div><button onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button></div></div><form onSubmit={handleFormSubmit} className="space-y-4"><div className="grid grid-cols-1 md:grid-cols-12 gap-4"><div className="col-span-12 md:col-span-3"><label className="block text-xs font-bold text-slate-500 mb-1">申請單位 *</label>
+      {/* ★★★ 1. 單位與申請人欄位樣式更新：改為 SearchableSelect (可搜尋/可自訂) ★★★ */}
+      {isCustomUnit ? (
+          <div className="flex gap-2">
+            <input type="text" value={newUnit} onChange={e => setNewUnit(e.target.value)} placeholder="請輸入單位名稱..." className="w-full p-2 border rounded-lg h-12" autoFocus />
+            <button type="button" onClick={() => { setIsCustomUnit(false); setNewUnit(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button>
+          </div>
+      ) : (
+          <SearchableSelect options={unitOptions} value={newUnit} onChange={(val) => setNewUnit(val)} placeholder="選擇或搜尋單位..." onCustomClick={(val) => { setIsCustomUnit(true); setNewUnit(val || ''); }} />
+      )}
+      </div><div className="col-span-12 md:col-span-3"><label className="block text-xs font-bold text-slate-500 mb-1">申請人 *</label>
+      {isCustomApplicant ? (
+          <div className="flex gap-2">
+            <input type="text" value={newApplicant} onChange={e => setNewApplicant(e.target.value)} placeholder="請輸入申請人..." className="w-full p-2 border rounded-lg h-12" autoFocus />
+            <button type="button" onClick={() => { setIsCustomApplicant(false); setNewApplicant(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button>
+          </div>
+      ) : (
+          <SearchableSelect options={applicantOptions} value={newApplicant} onChange={(val) => setNewApplicant(val)} placeholder="選擇或搜尋申請人..." onCustomClick={(val) => { setIsCustomApplicant(true); setNewApplicant(val || ''); }} />
+      )}
+      </div><div className="col-span-12 md:col-span-6"><label className="block text-xs font-bold text-slate-500 mb-1">計畫補助 (選填)</label>{isCustomSubsidy ? (<div className="flex gap-2"><input type="text" value={newSubsidy} onChange={e => setNewSubsidy(e.target.value)} placeholder="請輸入計畫名稱..." className="w-full p-2 border rounded-lg h-12" autoFocus /><button type="button" onClick={() => { setIsCustomSubsidy(false); setNewSubsidy(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={projectOptions} value={newSubsidy} onChange={(val) => setNewSubsidy(val)} placeholder="選擇或搜尋計畫..." onCustomClick={(val) => { setIsCustomSubsidy(true); setNewSubsidy(val || ''); }} />)}</div></div><div className="flex flex-col md:flex-row gap-4"><div className="w-full md:w-[70%]"><label className="block text-xs font-bold text-slate-500 mb-1">廠商 (選填)</label>{isCustomVendor ? (<div className="flex gap-2"><input type="text" value={newVendor} onChange={e => setNewVendor(e.target.value)} placeholder="請輸入廠商名稱..." className="w-full p-2 border rounded-lg h-12" autoFocus /><button type="button" onClick={() => { setIsCustomVendor(false); setNewVendor(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={vendorOptions} value={newVendor} onChange={(val) => setNewVendor(val)} placeholder="選擇或搜尋廠商..." onCustomClick={(val) => { setIsCustomVendor(true); setNewVendor(val || ''); }} />)}</div><div className="w-full md:w-[30%]"><label className="block text-xs font-bold text-slate-500 mb-1">申請單日期 (選填)</label><MinguoDateInput value={newApplicationDate} onChange={setNewApplicationDate} /></div></div><div><label className="block text-xs font-bold text-slate-500 mb-1">案件背景備註 (選填)</label><input type="text" placeholder="時程或其他重要備註" value={newGlobalRemark} onChange={e => setNewGlobalRemark(e.target.value)} className="w-full p-2 border rounded-lg h-12" /></div><div className="flex items-center"><label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2 rounded border border-red-100 h-12"><input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="w-5 h-5 text-red-600 rounded" /><span className={`text-sm font-bold ${isUrgent?'text-red-600':'text-slate-500'}`}>{isUrgent?'🔥 設定為速件':'一般案件'}</span></label></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><ShoppingCart size={16} /> 購買項目清單</label><div className="space-y-3">{newItems.map((item, index) => (<div key={item.id} className="group relative flex flex-col md:flex-row gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-blue-300"><div className="hidden md:flex items-center justify-center w-6 text-slate-400 font-mono text-sm self-center">{index + 1}.</div><div className="flex-1"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">品項名稱</label><textarea placeholder="品項名稱 *" value={item.subject} onChange={e => handleItemChange(index, 'subject', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300 resize-y min-h-[52px]" rows={1} required /></div><div className="flex gap-2 w-full md:w-auto"><div className="w-28 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">數量</label><input type="number" placeholder="數量 *" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div><div className="w-20 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單位</label><input type="text" placeholder="單位" value={item.measureUnit} onChange={e => handleItemChange(index, 'measureUnit', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-base focus:ring-2 focus:ring-blue-500 outline-none" /></div><div className="flex-1 md:w-40"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單價</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span><input type="number" placeholder="單價 *" value={item.unitPrice} onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} className="w-full pl-6 pr-3 py-3 border border-slate-300 rounded-lg text-right text-base focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div></div></div><div className="flex items-center justify-between md:justify-end gap-4 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto"><div className="md:hidden text-sm text-slate-500 font-medium">小計</div><div className="text-lg font-bold text-blue-600 w-24 text-right">${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}</div><button type="button" onClick={() => handleRemoveItem(index)} className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`} title="移除此項目"><X size={20} /></button></div></div>))}</div><div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200"><button type="button" onClick={handleAddItem} className="text-sm text-blue-600 flex items-center gap-1 font-bold hover:underline"><Plus size={16} /> 新增品項</button><div className="text-xl font-black">總預算: <span className="text-blue-600">${totalAmount.toLocaleString()}</span></div></div></div><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg h-12" disabled={isSubmitting}>取消</button><button type="submit" className={`px-8 py-2 text-white rounded-lg font-bold shadow-md flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} h-12`} disabled={isSubmitting}>{isSubmitting ? (<><Loader2 className="animate-spin" size={20} />處理中...</>) : (isEditMode ? '儲存修改' : '確認立案 (並新增下一筆)')}</button></div></form></div></div>)}
 
       <div className="max-w-7xl mx-auto p-4 md:p-6 text-center">
         {/* Header */}
@@ -718,9 +773,10 @@ export default function App() {
                     已選取 {selectedIds.size} 筆
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => handleBatchAction('advance')} className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg shadow-sm active:scale-95 transition-transform"><ArrowRight size={16} /> 批量推進</button>
-                    <button onClick={() => handleBatchAction('revert')} className="flex items-center gap-1 px-3 py-2 bg-orange-500 text-white text-sm font-bold rounded-lg shadow-sm active:scale-95 transition-transform"><RotateCcw size={16} /> 批量退回</button>
-                    <button onClick={() => handleBatchAction('receiver')} className="flex items-center gap-1 px-3 py-2 bg-indigo-500 text-white text-sm font-bold rounded-lg shadow-sm active:scale-95 transition-transform"><UserCheck size={16} /> 批量領回</button>
+                    <button onClick={() => handleBatchAction('advance')} className="flex items-center gap-1 px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg shadow-sm active:scale-95 transition-transform"><ArrowRight size={16} /> 批量推進</button>
+                    <button onClick={() => handleBatchAction('revert')} className="flex items-center gap-1 px-3 py-2 bg-red-600 text-white text-sm font-bold rounded-lg shadow-sm active:scale-95 transition-transform"><RotateCcw size={16} /> 批量退回</button>
+                    <button onClick={() => handleBatchAction('receiver')} className="flex items-center gap-1 px-3 py-2 bg-orange-600 text-white text-sm font-bold rounded-lg shadow-sm active:scale-95 transition-transform"><UserCheck size={16} /> 批量領回</button>
+                    <button onClick={() => handleBatchAction('direct_complete')} className="flex items-center gap-1 px-3 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg shadow-sm active:scale-95 transition-transform"><CheckCheck size={16} /> 直接結案</button>
                     <button onClick={() => setSelectedIds(new Set())} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"><X size={20} /></button>
                 </div>
             </div>

@@ -58,16 +58,7 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
 
   return (
     <>
-      <tr 
-        className={`
-            border-b border-slate-100 transition-colors 
-            ${isExpanded ? 'bg-blue-50/30' : ''} 
-            ${form.isUrgent 
-                ? 'bg-red-50 hover:bg-red-100'
-                : 'hover:bg-blue-50/50'
-            }
-        `}
-      >
+      <tr className={`border-b border-slate-100 hover:bg-blue-50/50 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''} ${form.isUrgent ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50/50'}`}>
         <td className="p-4 text-center w-12">
           <input 
             type="checkbox" 
