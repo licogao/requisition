@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Save, Settings, Layers, Briefcase, Users, AlertCircle, Edit2, Check, User, Filter, ArrowUp, ArrowDown } from 'lucide-react'; // ★ 新增 ArrowUp, ArrowDown
+import { X, Plus, Trash2, Save, Settings, Layers, Briefcase, Users, AlertCircle, Edit2, Check, User, Filter, ArrowUp, ArrowDown } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 
 const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAlert, openConfirm }) => {
@@ -12,10 +12,9 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
   const [editingIndex, setEditingIndex] = useState(null);
   const [editValue, setEditValue] = useState('');
 
-  // ★★★ 修正 1：每次打開視窗時，強制重置狀態，避免卡在「儲存中」 ★★★
   useEffect(() => {
     if (isOpen) {
-      setIsSaving(false); // 重置儲存狀態
+      setIsSaving(false);
       setNewItem('');
       setEditingIndex(null);
       if (initialData) {
@@ -79,14 +78,11 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
     updateCurrentList(currentList.filter(item => item !== itemToDelete));
   };
 
-  // ★★★ 2. 新增：上下移動功能 ★★★
   const handleMoveItem = (index, direction) => {
     const currentList = [...getCurrentList()];
-    // 檢查邊界
-    if (direction === -1 && index === 0) return; // 已經是第一個，不能上移
-    if (direction === 1 && index === currentList.length - 1) return; // 已經是最後一個，不能下移
+    if (direction === -1 && index === 0) return; 
+    if (direction === 1 && index === currentList.length - 1) return; 
 
-    // 交換位置
     const targetIndex = index + direction;
     [currentList[index], currentList[targetIndex]] = [currentList[targetIndex], currentList[index]];
 
@@ -129,7 +125,6 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
       console.error("Save settings error:", error);
       openAlert('儲存失敗', '無法更新設定，請檢查網路。', 'danger');
     } finally {
-      // 雖然 onClose 會隱藏視窗，但重置狀態以防萬一
       setIsSaving(false);
     }
   };
@@ -228,11 +223,9 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
                     </div>
                   ) : (
                     <>
-                        {/* 顯示名稱 (加大字體) */}
                         <span className="font-medium text-slate-700 break-all pr-2 flex-1 text-lg">{item}</span>
                         
                         <div className="flex gap-1 shrink-0 items-center">
-                            {/* ★ 上下移動按鈕 ★ */}
                             <div className="flex flex-col gap-0.5 mr-2">
                                 <button 
                                     onClick={() => handleMoveItem(index, -1)}
@@ -274,17 +267,8 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
         </div>
 
         <div className="p-4 border-t bg-slate-50 rounded-b-xl flex justify-end gap-3 shrink-0">
-          <button 
-            onClick={onClose} 
-            className="px-6 py-2.5 text-slate-500 font-bold hover:bg-slate-200 rounded-lg transition-colors text-base"
-          >
-            取消
-          </button>
-          <button 
-            onClick={handleSave} 
-            disabled={isSaving}
-            className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md flex items-center gap-2 disabled:opacity-50 transition-colors text-base"
-          >
+          <button onClick={onClose} className="px-6 py-2.5 text-slate-500 font-bold hover:bg-slate-200 rounded-lg transition-colors text-base">取消</button>
+          <button onClick={handleSave} disabled={isSaving} className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md flex items-center gap-2 disabled:opacity-50 transition-colors text-base">
             <Save size={20} /> {isSaving ? '儲存中...' : '儲存變更'}
           </button>
         </div>

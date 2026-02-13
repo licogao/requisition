@@ -22,8 +22,6 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
   const [loading, setLoading] = useState(false);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
-  
-  // ★★★ 修改：將每頁筆數提高到 50，瀏覽更順暢 ★★★
   const PAGE_SIZE = 50;
 
   // 載入日誌
@@ -51,8 +49,6 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
       }
 
       setLastDoc(snapshot.docs[snapshot.docs.length - 1]);
-      
-      // 如果抓回來的數量少於 PAGE_SIZE，代表已經沒有更多資料了
       setHasMore(snapshot.docs.length === PAGE_SIZE);
     } catch (err) {
       console.error("Fetch logs error:", err);

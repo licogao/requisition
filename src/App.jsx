@@ -26,7 +26,6 @@ import GlobalModal from './components/GlobalModal';
 import FormRow from './components/FormRow';
 import MobileFormCard from './components/MobileFormCard'; 
 import LogViewerModal from './components/LogViewerModal'; 
-
 import AppHeader from './components/AppHeader';
 import FilterBar from './components/FilterBar';
 
@@ -34,7 +33,7 @@ const ADMIN_EMAILS = [`268${DEFAULT_DOMAIN}`];
 
 export default function App() {
   const { user, loading: authLoading, error: authError, login: handleLogin, logout: handleLogout } = useAuth();
-  const { unitOptions, projectOptions, vendorOptions, applicantOptions } = useSettings(user);
+  const { unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -50,9 +49,7 @@ export default function App() {
   const [filterStartDate, setFilterStartDate] = useState(''); 
   const [filterEndDate, setFilterEndDate] = useState('');     
   const [showUrgentOnly, setShowUrgentOnly] = useState(false);
-  
   const [selectedIds, setSelectedIds] = useState(new Set());
-
   const [expandedId, setExpandedId] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, type: 'alert', title: '', message: '' });
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -60,11 +57,9 @@ export default function App() {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false); 
   const [isDebugClearOpen, setIsDebugClearOpen] = useState(false);
   const [isLogViewerOpen, setIsLogViewerOpen] = useState(false); 
-
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [exportMode, setExportMode] = useState('all');
-
   const [newUnit, setNewUnit] = useState('');
   const [newApplicant, setNewApplicant] = useState('');
   const [newSubsidy, setNewSubsidy] = useState('');
@@ -81,7 +76,6 @@ export default function App() {
   const [isCustomVendor, setIsCustomVendor] = useState(false);
   const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [isCustomApplicant, setIsCustomApplicant] = useState(false);
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSearchingCloud, setIsSearchingCloud] = useState(false); 
 
@@ -132,7 +126,10 @@ export default function App() {
         
         if (hasAccountingReviewForms) {
             setModal({ 
-                isOpen: true, type: 'alert', alertType: 'warning', title: '操作受限', 
+                isOpen: true, 
+                type: 'alert', 
+                alertType: 'warning', 
+                title: '操作受限', 
                 message: '選取項目中包含「第一輪：會計室審核中」的單據。\n\n此階段必須填寫領回人才能進入下一步，無法使用批量推進。\n\n請改用「批量領回」功能。' 
             });
             return;
@@ -278,7 +275,6 @@ export default function App() {
         logAction(db, appId, user, logType, `批量操作 (${type}): 成功 ${successCount} 筆, 略過 ${skipCount} 筆`);
         
         setModal({ isOpen: true, title: '處理完成', message: `成功更新: ${successCount} 筆\n自動略過: ${skipCount} 筆 (狀態不符或失敗)` });
-        setSelectedIds(new Set()); 
     } else {
         setModal({ isOpen: true, type: 'alert', alertType: 'warning', title: '無變更', message: '沒有符合條件的單據可供更新。' });
     }
@@ -350,8 +346,8 @@ export default function App() {
       );
       if (!match) return false;
       
-      if (filterPhase === 'phase1') return STATUS_STEPS[form.status]?.phase === 1 && form.status !== 'P1_RETURNED' && form.status !== 'P2_RETURNED';
-      if (filterPhase === 'phase2') return (STATUS_STEPS[form.status]?.phase === 2 || form.status === 'P1_RETURNED' || form.status === 'P2_RETURNED') && form.status !== 'COMPLETED';
+      if (filterPhase === 'phase1') return STATUS_STEPS[form.status]?.phase === 1 && form.status !== 'P1_RETURNED';
+      if (filterPhase === 'phase2') return (STATUS_STEPS[form.status]?.phase === 2 || form.status === 'P1_RETURNED') && form.status !== 'COMPLETED';
       if (filterPhase === 'phase3') return STATUS_STEPS[form.status]?.phase === 3;
       
       return true;
@@ -419,35 +415,12 @@ export default function App() {
 
     setIsSubmitting(true);
     try {
-      const updateData = {};
-      
-      const trimmedUnit = newUnit.trim();
-      if (trimmedUnit && !unitOptions.includes(trimmedUnit) && window.confirm(`是否將「${trimmedUnit}」加入常用單位？`)) {
-          updateData.units = [...unitOptions, trimmedUnit];
-      }
-
-      const trimmedApplicant = newApplicant.trim();
-      const currentUnitApplicants = applicantOptions[trimmedUnit] || [];
-      if (trimmedApplicant && !currentUnitApplicants.includes(trimmedApplicant) && window.confirm(`是否將「${trimmedApplicant}」加入 ${trimmedUnit} 的常用名單？`)) {
-          updateData.applicants = {
-              ...applicantOptions,
-              [trimmedUnit]: [...currentUnitApplicants, trimmedApplicant]
-          };
-      }
-
-      const trimmedSubsidy = newSubsidy.trim();
-      if (trimmedSubsidy && !projectOptions.includes(trimmedSubsidy) && trimmedSubsidy !== '無計畫 (公務)' && window.confirm(`是否將「${trimmedSubsidy}」加入常用計畫？`)) {
-          updateData.projects = [...projectOptions, trimmedSubsidy];
-      }
-      
-      const trimmedVendor = newVendor.trim();
-      if (trimmedVendor && !vendorOptions.includes(trimmedVendor) && window.confirm(`是否將「${trimmedVendor}」加入常用廠商？`)) {
-          updateData.vendors = [...vendorOptions, trimmedVendor];
-      }
-
-      if (Object.keys(updateData).length > 0) {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_settings', 'config1'), updateData, { merge: true });
-      }
+      checkAndSaveNewOptions({ 
+          newUnit, 
+          newApplicant, 
+          newSubsidy, 
+          newVendor 
+      });
 
       const timestamp = new Date().toISOString();
       const mainSubject = newItems.map(i => i.subject).join('、');
@@ -646,7 +619,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans pb-20 md:pb-0"> 
-      <GlobalModal modal={modal} onClose={() => setModal({ ...modal, isOpen: false })} onConfirm={modal.onConfirm} />
+      <GlobalModal 
+        modal={modal} 
+        onClose={() => setModal({ ...modal, isOpen: false })} 
+        onConfirm={modal.onConfirm} 
+        unitOptions={unitOptions} 
+        applicantOptions={applicantOptions}
+      />
       <ManageCompletedModal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} onExport={() => { const hasCompletedForms = forms.some(f => STATUS_STEPS[f.status]?.phase === 3); if (!hasCompletedForms) { openAlert('匯出失敗', '目前沒有已結案的資料可供備份。', 'danger'); return; } setExportMode('completed'); setShowExportFormatSelect(true); }} statusSteps={STATUS_STEPS} />
       <DebugClearModal isOpen={isDebugClearOpen} onClose={() => setIsDebugClearOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} />
       <LogViewerModal isOpen={isLogViewerOpen} onClose={() => setIsLogViewerOpen(false)} db={db} appId={appId} />
