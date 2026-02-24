@@ -4,7 +4,6 @@ import SearchableSelect from './SearchableSelect';
 
 const GlobalModal = ({ modal, onClose, onConfirm, unitOptions = [], applicantOptions = {} }) => {
   const [note, setNote] = useState('');
-  
   const [pickupUnit, setPickupUnit] = useState('');
   const [pickupName, setPickupName] = useState('');
   const [isCustomUnit, setIsCustomUnit] = useState(false);
@@ -18,7 +17,6 @@ const GlobalModal = ({ modal, onClose, onConfirm, unitOptions = [], applicantOpt
     return [];
   }, [pickupUnit, applicantOptions]);
 
-  // 重置狀態
   useEffect(() => {
     if (modal.isOpen) {
       setNote('');
@@ -45,25 +43,24 @@ const GlobalModal = ({ modal, onClose, onConfirm, unitOptions = [], applicantOpt
     onClose();
   }, [modal, note, pickupName, onConfirm, onClose]);
 
+  // 鍵盤事件監聽
   useEffect(() => {
     if (!modal.isOpen) return;
 
     const handleKeyDown = (e) => {
-      // 1. ESC 關閉
       if (e.key === 'Escape') {
         onClose();
         return;
       }
 
-      // 2. Enter 確認
       if (e.key === 'Enter') {
         const target = e.target;
         const isTextarea = target.tagName.toLowerCase() === 'textarea';
         
-        if (isTextarea) {
-            if (!e.ctrlKey && !e.metaKey) return; 
-        }
-
+        // 備註欄換行防呆
+        if (isTextarea && !e.ctrlKey && !e.metaKey) return; 
+        
+        // 按鈕預設會觸發 click，避免重複執行
         if (target.tagName.toLowerCase() === 'button') return;
 
         e.preventDefault();
@@ -73,7 +70,7 @@ const GlobalModal = ({ modal, onClose, onConfirm, unitOptions = [], applicantOpt
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [modal.isOpen, handleConfirm]);
+  }, [modal.isOpen, handleConfirm]); 
 
   if (!modal.isOpen) return null;
 

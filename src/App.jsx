@@ -26,6 +26,7 @@ import GlobalModal from './components/GlobalModal';
 import FormRow from './components/FormRow';
 import MobileFormCard from './components/MobileFormCard'; 
 import LogViewerModal from './components/LogViewerModal'; 
+
 import AppHeader from './components/AppHeader';
 import FilterBar from './components/FilterBar';
 
@@ -36,10 +37,12 @@ export default function App() {
   const { unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
+  // --- UI 狀態 ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [monthTabs] = useState(generateMonthList());
   const [searchTerm, setSearchTerm] = useState('');
   
+  // --- 篩選狀態 ---
   const [filterPhase, setFilterPhase] = useState('all');
   const [filterMonth, setFilterMonth] = useState(() => {
     const d = new Date();
@@ -49,7 +52,9 @@ export default function App() {
   const [filterStartDate, setFilterStartDate] = useState(''); 
   const [filterEndDate, setFilterEndDate] = useState('');     
   const [showUrgentOnly, setShowUrgentOnly] = useState(false);
+  
   const [selectedIds, setSelectedIds] = useState(new Set());
+
   const [expandedId, setExpandedId] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, type: 'alert', title: '', message: '' });
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -57,9 +62,13 @@ export default function App() {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false); 
   const [isDebugClearOpen, setIsDebugClearOpen] = useState(false);
   const [isLogViewerOpen, setIsLogViewerOpen] = useState(false); 
+
+  // --- 匯出狀態 ---
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [exportMode, setExportMode] = useState('all');
+
+  // --- 表單狀態 ---
   const [newUnit, setNewUnit] = useState('');
   const [newApplicant, setNewApplicant] = useState('');
   const [newSubsidy, setNewSubsidy] = useState('');
@@ -76,6 +85,7 @@ export default function App() {
   const [isCustomVendor, setIsCustomVendor] = useState(false);
   const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [isCustomApplicant, setIsCustomApplicant] = useState(false);
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSearchingCloud, setIsSearchingCloud] = useState(false); 
 
@@ -321,6 +331,7 @@ export default function App() {
 
   const filteredForms = useMemo(() => {
     return forms.filter(form => {
+      // 確保勾選的項目不會被篩選器隱藏
       if (selectedIds.has(form.id)) return true;
 
       if (filterMonth !== 'all') {
@@ -375,6 +386,7 @@ export default function App() {
     if (isFormOpen && !isEditMode) setPreviewSerialId(generateSerialId());
   }, [isFormOpen, forms, isEditMode]);
 
+  // --- 表單處理事件 ---
   const handleAddItem = () => setNewItems([...newItems, { id: Date.now(), subject: '', quantity: 1, measureUnit: '個', unitPrice: '' }]);
   const handleRemoveItem = (index) => { if (newItems.length > 1) { const updated = [...newItems]; updated.splice(index, 1); setNewItems(updated); } };
   const handleItemChange = (index, field, value) => { const updated = [...newItems]; updated[index][field] = value; setNewItems(updated); };
@@ -653,7 +665,6 @@ export default function App() {
       </div><div className="col-span-12 md:col-span-6"><label className="block text-xs font-bold text-slate-500 mb-1">計畫補助 (選填)</label>{isCustomSubsidy ? (<div className="flex gap-2"><input type="text" value={newSubsidy} onChange={e => setNewSubsidy(e.target.value)} placeholder="請輸入計畫名稱..." className="w-full p-2 border rounded-lg h-12 text-lg" autoFocus /><button type="button" onClick={() => { setIsCustomSubsidy(false); setNewSubsidy(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={projectOptions} value={newSubsidy} onChange={(val) => setNewSubsidy(val)} placeholder="選擇或搜尋計畫..." onCustomClick={(val) => { setIsCustomSubsidy(true); setNewSubsidy(val || ''); }} />)}</div></div><div className="flex flex-col md:flex-row gap-4"><div className="w-full md:w-[70%]"><label className="block text-xs font-bold text-slate-500 mb-1">廠商 (選填)</label>{isCustomVendor ? (<div className="flex gap-2"><input type="text" value={newVendor} onChange={e => setNewVendor(e.target.value)} placeholder="請輸入廠商名稱..." className="w-full p-2 border rounded-lg h-12 text-lg" autoFocus /><button type="button" onClick={() => { setIsCustomVendor(false); setNewVendor(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded h-12 w-12 flex items-center justify-center"><X size={20} /></button></div>) : (<SearchableSelect options={vendorOptions} value={newVendor} onChange={(val) => setNewVendor(val)} placeholder="選擇或搜尋廠商..." onCustomClick={(val) => { setIsCustomVendor(true); setNewVendor(val || ''); }} />)}</div><div className="w-full md:w-[30%]"><label className="block text-xs font-bold text-slate-500 mb-1">申請單日期 (選填)</label><MinguoDateInput value={newApplicationDate} onChange={setNewApplicationDate} /></div></div><div><label className="block text-xs font-bold text-slate-500 mb-1">案件背景備註 (選填)</label><input type="text" placeholder="時程或其他重要備註" value={newGlobalRemark} onChange={e => setNewGlobalRemark(e.target.value)} className="w-full p-2 border rounded-lg h-12 text-lg" /></div><div className="flex items-center"><label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2 rounded border border-red-100 h-12"><input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="w-5 h-5 text-red-600 rounded" /><span className={`text-sm font-bold ${isUrgent?'text-red-600':'text-slate-500'}`}>{isUrgent?'🔥 設定為速件':'一般案件'}</span></label></div><div className="bg-slate-50 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2"><ShoppingCart size={16} /> 購買項目清單</label><div className="space-y-3">{newItems.map((item, index) => (<div key={item.id} className="group relative flex flex-col md:flex-row gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-blue-300"><div className="hidden md:flex items-center justify-center w-6 text-slate-400 font-mono text-sm self-center">{index + 1}.</div><div className="flex-1"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">品項名稱</label><textarea placeholder="品項名稱 *" value={item.subject} onChange={e => handleItemChange(index, 'subject', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-300 resize-y min-h-[52px]" rows={1} required /></div><div className="flex gap-2 w-full md:w-auto"><div className="w-28 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">數量</label><input type="number" placeholder="數量 *" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div><div className="w-20 shrink-0"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單位</label><input type="text" placeholder="單位" value={item.measureUnit} onChange={e => handleItemChange(index, 'measureUnit', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-blue-500 outline-none" /></div><div className="flex-1 md:w-40"><label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單價</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span><input type="number" placeholder="單價 *" value={item.unitPrice} onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} className="w-full pl-6 pr-3 py-3 border border-slate-300 rounded-lg text-right text-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required /></div></div></div><div className="flex items-center justify-between md:justify-end gap-4 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto"><div className="md:hidden text-sm text-slate-500 font-medium">小計</div><div className="text-lg font-bold text-blue-600 w-24 text-right">${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}</div><button type="button" onClick={() => handleRemoveItem(index)} className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`} title="移除此項目"><X size={20} /></button></div></div>))}</div><div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-200"><button type="button" onClick={handleAddItem} className="text-sm text-blue-600 flex items-center gap-1 font-bold hover:underline"><Plus size={16} /> 新增品項</button><div className="text-xl font-black">總預算: <span className="text-blue-600">${totalAmount.toLocaleString()}</span></div></div></div><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg h-12" disabled={isSubmitting}>取消</button><button type="submit" className={`px-8 py-2 text-white rounded-lg font-bold shadow-md flex items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} h-12`} disabled={isSubmitting}>{isSubmitting ? (<><Loader2 className="animate-spin" size={20} />處理中...</>) : (isEditMode ? '儲存修改' : '確認立案 (並新增下一筆)')}</button></div></form></div></div>)}
 
       <div className="max-w-7xl mx-auto p-4 md:p-6 text-center">
-        {/* Header */}
         <AppHeader 
           user={user}
           onImportFile={handleImportFile}
@@ -664,7 +675,6 @@ export default function App() {
           onOpenCreate={handleOpenCreate}
         />
 
-        {/* Filter Bar */}
         <FilterBar 
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
@@ -695,7 +705,6 @@ export default function App() {
             <div className="bg-white p-20 rounded-2xl text-center shadow-sm border border-dashed border-slate-300"><FileText className="mx-auto mb-4 text-slate-200" size={48} /><p className="text-slate-400">沒有符合條件的資料</p></div>
           ) : (
             <>
-              {/* 電腦版表格 */}
               <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <table className="w-full text-left table-fixed">
                   <thead className="bg-slate-50 text-sm text-slate-600 font-bold border-b">
@@ -719,7 +728,6 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              {/* 手機版卡片 */}
               <div className="block md:hidden space-y-3">
                 <div className="flex justify-between items-center px-2 pb-2">
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
@@ -738,7 +746,7 @@ export default function App() {
             </>
           )}
         </div>
-        {/* Sticky Batch Actions */}
+        
         {selectedIds.size > 0 && (
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-blue-200 p-3 shadow-lg flex justify-center gap-4 items-center z-40">
                 <div className="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">

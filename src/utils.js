@@ -1,202 +1,143 @@
 import { STATUS_STEPS } from './constants';
 
-export const isoToMinguo = (isoDateStr) => {
-  if (!isoDateStr) return '';
-  const parts = isoDateStr.split('-');
-  if (parts.length !== 3) return isoDateStr;
-  return `${parseInt(parts[0]) - 1911}-${parts[1]}/${parts[2]}`; 
-};
-
-export const minguoToIso = (minguoStr) => {
-  if (!minguoStr) return '';
-  let cleanStr = minguoStr.replace(/[^\d]/g, '');
-  
-  if (cleanStr.length === 6 || cleanStr.length === 7) {
-    const yLen = cleanStr.length === 7 ? 3 : 2;
-    const y = parseInt(cleanStr.substring(0, yLen)) + 1911;
-    const m = cleanStr.substring(yLen, yLen + 2);
-    const d = cleanStr.substring(yLen + 2);
-    return `${y}-${m}-${d}`;
-  }
-  
-  const parts = minguoStr.split(/[-/.]/);
-  if (parts.length === 3) {
-      const y = parseInt(parts[0]) + 1911;
-      const m = parts[1].padStart(2, '0');
-      const d = parts[2].padStart(2, '0');
-      return `${y}-${m}-${d}`;
-  }
-  return '';
-};
-
-export const formatDate = (isoString) => {
-  if (!isoString) return '-';
-  try {
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return '-';
-    const y = date.getFullYear() - 1911;
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    const h = String(date.getHours()).padStart(2, '0');
-    const min = String(date.getMinutes()).padStart(2, '0');
-    return `${y}/${m}/${d} ${h}:${min}`;
-  } catch (e) { return '-'; }
-};
-
-export const toMinguoDate = (dateObj) => {
-  if (!dateObj || isNaN(dateObj.getTime())) return '-';
-  const y = dateObj.getFullYear() - 1911;
-  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const d = String(dateObj.getDate()).padStart(2, '0');
-  return `${y}/${m}/${d}`;
+export const isoToMinguo = (isoString) => {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return isoString;
+  return `${date.getFullYear() - 1911}年${String(date.getMonth() + 1).padStart(2, '0')}月${String(date.getDate()).padStart(2, '0')}日`;
 };
 
 export const generateMonthList = () => {
-  const months = [];
-  const today = new Date();
-  for (let i = -12; i <= 1; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const label = `${d.getFullYear() - 1911}年${d.getMonth() + 1}月`;
-    months.push({ value, label });
+  const list = ['all'];
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    list.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
-  return months.reverse();
-};
-
-export const parseCSVLine = (line) => {
-  const cleanLine = line.replace(/^\uFEFF/, '');
-  const result = [];
-  let start = 0;
-  let inQuotes = false;
-  
-  for (let i = 0; i < cleanLine.length; i++) {
-    if (cleanLine[i] === '"') {
-      inQuotes = !inQuotes;
-    } else if (cleanLine[i] === ',' && !inQuotes) {
-      let field = cleanLine.substring(start, i);
-      if (field.startsWith('"') && field.endsWith('"')) {
-          field = field.slice(1, -1).replace(/""/g, '"');
-      }
-      result.push(field);
-      start = i + 1;
-    }
-  }
-  
-  let field = cleanLine.substring(start);
-  if (field.startsWith('"') && field.endsWith('"')) {
-      field = field.slice(1, -1).replace(/""/g, '"');
-  }
-  result.push(field);
-  return result;
+  return list;
 };
 
 export const getOperatorName = (user) => {
-    if (!user) return '未知';
-    if (user.isAnonymous) return '訪客';
-    if (user.email) return user.email.split('@')[0];
-    return '管理員';
+  if (!user) return '未知使用者';
+  return user.displayName || user.email?.split('@')[0] || '系統管理員';
 };
 
-export const generateCSV = (dataToExport) => {
-    const headers = ['流水號', '原申請單日期', '是否速件', '申請日期', '申請單位', '申請人', '計畫補助', '廠商', '品項名稱', '數量', '單位', '單價', '小計', '領回人', '目前狀態', '目前狀態時間', '備註'];
-    let csvRows = [];
+// 加入字串過濾，避免換行與逗號破壞 CSV 格式
+const safeString = (val) => {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/[\r\n]+/g, ' ') 
+    .replace(/,/g, '，');      
+};
+
+// 將資料轉換為 CSV 格式字串 (加上 BOM 避免 Excel 亂碼)
+export const generateCSV = (data) => {
+  const headers = [
+    '流水號', '申請單日期', '建立時間', '申請單位', '申請人', 
+    '計畫', '廠商', '品項名稱', '數量', '單位', '單價', '小計', 
+    '總金額', '目前狀態', '領回人', '領回時間', '備註'
+  ];
+  
+  const csvRows = [];
+
+  data.forEach(item => {
+    const serial = safeString(item.serialId);
+    const appDate = safeString(isoToMinguo(item.applicationDate));
+    const createTime = safeString(item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('zh-TW') : '');
+    const unit = safeString(item.unit);
+    const applicant = safeString(item.applicant);
+    const subsidy = safeString(item.subsidy);
+    const vendor = safeString(item.vendor);
+    const total = item.totalPrice || 0;
+    const status = safeString(STATUS_STEPS[item.status]?.label || item.status);
+    const receiver = safeString(item.receiverName);
+    const remark = safeString(item.globalRemark);
     
-    const escape = (val) => {
-        if (val === null || val === undefined) return '""';
-        return `"${String(val).replace(/"/g, '""')}"`;
-    };
-
-    const getValidDate = (val) => {
-        if (!val) return null;
-        if (typeof val.toDate === 'function') return val.toDate();
-        if (val?.seconds) return new Date(val.seconds * 1000);
-        const d = new Date(val);
-        return isNaN(d.getTime()) ? null : d;
-    };
-
-    dataToExport.forEach(f => {
-      const createdDate = getValidDate(f.createdAt);
-      const dateStr = createdDate ? toMinguoDate(createdDate) : '-';
-      const appDateStr = isoToMinguo(f.applicationDate);
-      const statusStr = STATUS_STEPS[f.status]?.label || f.status;
-      
-      const updatedDate = getValidDate(f.updatedAt);
-      const statusTimeStr = updatedDate ? formatDate(updatedDate.toISOString()) : '-';
-      
-      if (f.items && f.items.length > 0) {
-          f.items.forEach(item => {
-              const row = [
-                f.serialId, appDateStr, f.isUrgent?'是':'否', dateStr, f.unit, f.applicant, f.subsidy, f.vendor || '', 
-                item.subject, item.quantity, item.measureUnit, item.unitPrice, item.subtotal, 
-                f.receiverName||'', statusStr, statusTimeStr, f.globalRemark || ''
-              ].map(escape).join(',');
-              csvRows.push(row);
-          });
-      } else {
-          const row = [
-            f.serialId, appDateStr, f.isUrgent?'是':'否', dateStr, f.unit, f.applicant, f.subsidy, f.vendor || '', 
-            f.subject, '1', '式', f.totalPrice, f.totalPrice, 
-            f.receiverName||'', statusStr, statusTimeStr, f.globalRemark || ''
-          ].map(escape).join(',');
-          csvRows.push(row);
-      }
-    });
-    
-    return '\uFEFF' + [headers.map(escape).join(','), ...csvRows].join('\n');
-};
-
-export const downloadCSV = (content, filename) => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); 
-    link.href = url; 
-    link.download = filename; 
-    link.click();
-};
-
-export const generateBackupJSON = (dataToExport) => {
-    return JSON.stringify(dataToExport, null, 2);
-};
-
-export const downloadJSON = (content, filename) => {
-    const blob = new Blob([content], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); 
-    link.href = url; 
-    link.download = filename; 
-    link.click();
-};
-
-export const processBackupImport = (currentDBData, importedFileData) => {
-    const currentDataMap = new Map(currentDBData.map(item => [item.id, item]));
-    const mergedResults = [];
-    const timestampStr = new Date().toISOString(); 
-
-    importedFileData.forEach(importItem => {
-        const importLogRecord = {
-            status: importItem.status, 
-            timestamp: timestampStr, 
-            note: "系統批次匯入 (還原)",
-            operator: "系統"
-        };
-
-        const newItem = {
-            ...importItem,
-            updatedAt: timestampStr,
-            logs: [...(importItem.logs || []), importLogRecord]
-        };
-
-        if (currentDataMap.has(importItem.id)) {
-            mergedResults.push(newItem);
-            currentDataMap.delete(importItem.id);
-        } else {
-            mergedResults.push(newItem);
+    // 尋找領回時間
+    let pickupTimeStr = '';
+    if (item.time_P1_RETURNED) {
+        pickupTimeStr = new Date(item.time_P1_RETURNED).toLocaleString('zh-TW');
+    } else if (item.logs) {
+        const pickupLog = item.logs.find(log => log.status === 'P1_RETURNED' || (log.note && log.note.includes('領回')));
+        if (pickupLog && pickupLog.timestamp) {
+            pickupTimeStr = new Date(pickupLog.timestamp).toLocaleString('zh-TW');
         }
-    });
+    }
+    const pickupTime = safeString(pickupTimeStr);
 
-    currentDataMap.forEach(existingItem => {
-        mergedResults.push(existingItem);
-    });
+    // 展開品項陣列為多行
+    if (item.items && item.items.length > 0) {
+        item.items.forEach(subItem => {
+            csvRows.push([
+                serial, appDate, createTime, unit, applicant,
+                subsidy, vendor, safeString(subItem.subject), subItem.quantity || 0, safeString(subItem.measureUnit),
+                subItem.unitPrice || 0, subItem.subtotal || 0, total, status, receiver, pickupTime, remark
+            ].join(','));
+        });
+    } else {
+        csvRows.push([
+            serial, appDate, createTime, unit, applicant,
+            subsidy, vendor, safeString(item.subject), 1, '式',
+            total, total, total, status, receiver, pickupTime, remark
+        ].join(','));
+    }
+  });
 
-    return mergedResults;
+  const csvContent = [
+    headers.join(','),
+    ...csvRows
+  ].join('\n');
+  
+  return '\uFEFF' + csvContent; 
+};
+
+export const downloadCSV = (csvContent, fileName) => {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', fileName);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+// 將資料轉換為 JSON 格式 (處理 Firebase Timestamp)
+export const generateBackupJSON = (data) => {
+    const cleanData = data.map(item => {
+        const newItem = { ...item };
+        if (newItem.createdAt?.toDate) newItem.createdAt = newItem.createdAt.toDate().toISOString();
+        if (newItem.updatedAt?.toDate) newItem.updatedAt = newItem.updatedAt.toDate().toISOString();
+        return newItem;
+    });
+    return JSON.stringify(cleanData, null, 2);
+};
+
+export const downloadJSON = (jsonContent, fileName) => {
+  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', fileName);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+// 處理備份檔匯入的資料合併邏輯
+export const processBackupImport = (existingData, importedData) => {
+  const existingMap = new Map(existingData.map(item => [item.id, item]));
+  
+  importedData.forEach(item => {
+      // 將 JSON 裡的字串日期還原為 Date 物件，確保寫入 Firestore 時能轉回時間戳記以維持排序
+      const parsedItem = { ...item };
+      if (typeof parsedItem.createdAt === 'string') parsedItem.createdAt = new Date(parsedItem.createdAt);
+      if (typeof parsedItem.updatedAt === 'string') parsedItem.updatedAt = new Date(parsedItem.updatedAt);
+
+      existingMap.set(parsedItem.id, { ...existingMap.get(parsedItem.id), ...parsedItem });
+  });
+  
+  return Array.from(existingMap.values());
 };
