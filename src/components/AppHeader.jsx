@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Upload, Activity, Wrench, Settings, LogOut, Plus } from 'lucide-react';
+import { FileText, Upload, Activity, Wrench, Settings, LogOut, Plus, FileSpreadsheet } from 'lucide-react';
 import { DEFAULT_DOMAIN } from '../constants';
 
 const ADMIN_EMAILS = [`268${DEFAULT_DOMAIN}`];
@@ -11,7 +11,8 @@ const AppHeader = ({
   onDebugClear, 
   onOpenSettings, 
   onLogout, 
-  onOpenCreate 
+  onOpenCreate,
+  onOpenCsvViewer
 }) => {
   return (
     <header className="mb-6 flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm">
@@ -23,8 +24,16 @@ const AppHeader = ({
       </div>
       
       <div className="flex flex-wrap gap-2 justify-center md:justify-end">
+        <button 
+          onClick={onOpenCsvViewer} 
+          className="flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 md:px-3 py-2 rounded-lg hover:bg-emerald-100 text-xs md:text-sm font-bold transition-colors h-auto md:h-10 shadow-sm" 
+          title="開啟離線 CSV 報表檢視器"
+        >
+          <FileSpreadsheet size={16} /> 報表檢視
+        </button>
+
         <label className="flex items-center gap-2 bg-slate-50 border px-2 md:px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-100 text-xs md:text-sm font-medium transition-colors h-auto md:h-10">
-          <Upload size={16} /> 匯入檔案 
+          <Upload size={16} /> 匯入還原
           <input type="file" accept=".json" className="hidden" onChange={onImportFile} />
         </label>
 

@@ -7,6 +7,7 @@ export const STATUS_STEPS = {
   P2_RECEIVED: { label: '第二輪：收到發票/核銷單', color: 'bg-blue-100 text-blue-800', nextAction: '送經辦核銷', phase: 2 },
   P2_ACCOUNTING: { label: '第二輪：經辦核銷中', color: 'bg-yellow-100 text-yellow-800', nextAction: '全案結案', phase: 2 },
   COMPLETED: { label: '第三輪：已結案', color: 'bg-gray-800 text-white', nextAction: null, phase: 3 },
+  VOIDED: { label: '已作廢', color: 'bg-slate-200 text-slate-500', nextAction: null, phase: 4 }, // ★ 新增作廢狀態
 };
 
 export const LABEL_TO_STATUS = Object.entries(STATUS_STEPS).reduce((acc, [key, val]) => {

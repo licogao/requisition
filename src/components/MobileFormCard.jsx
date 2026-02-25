@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  ChevronDown, ChevronUp, Clock, User, Building, PlayCircle, CheckCircle, AlertCircle, ArrowRight, XCircle, RotateCcw, Edit2 
+  ChevronDown, ChevronUp, Clock, User, Building, PlayCircle, CheckCircle, AlertCircle, ArrowRight, XCircle, RotateCcw, Edit2, Copy, Ban 
 } from 'lucide-react';
 
 const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps, selected, onSelect, canRevert }) => {
@@ -11,6 +11,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
     if (phase === 1) return 'bg-blue-100 text-blue-700 border-blue-200';
     if (phase === 2) return 'bg-orange-100 text-orange-700 border-orange-200';
     if (phase === 3) return 'bg-slate-900 text-white border-slate-700';
+    if (phase === 4) return 'bg-slate-200 text-slate-500 border-slate-300';
     return 'bg-slate-100 text-slate-700 border-slate-200';
   };
 
@@ -18,6 +19,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
     if (phase === 1) return <PlayCircle size={16} />;
     if (phase === 2) return <Clock size={16} />;
     if (phase === 3) return <CheckCircle size={16} />;
+    if (phase === 4) return <Ban size={16} />;
     return <AlertCircle size={16} />;
   };
 
@@ -31,7 +33,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
   };
 
   return (
-    <div className={`bg-white rounded-xl border shadow-sm transition-all duration-200 ${isExpanded ? 'border-blue-400 ring-1 ring-blue-100' : 'border-slate-200'} ${selected ? 'bg-blue-50/30 ring-1 ring-blue-300 border-blue-300' : ''} ${form.isUrgent ? 'bg-red-50' : ''}`}>
+    <div className={`bg-white rounded-xl border shadow-sm transition-all duration-200 ${isExpanded ? 'border-blue-400 ring-1 ring-blue-100' : 'border-slate-200'} ${selected ? 'bg-blue-50/30 ring-1 ring-blue-300 border-blue-300' : ''} ${form.isUrgent ? 'bg-red-50' : ''} ${statusConfig.phase === 4 ? 'opacity-70 grayscale-[30%]' : ''}`}>
       <div className="p-4">
         <div className="flex gap-3">
           <div className="pt-1">
@@ -61,7 +63,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
                   </span>
                 </div>
                 
-                <h3 className="font-bold text-slate-800 text-base leading-tight">
+                <h3 className={`font-bold text-slate-800 text-base leading-tight ${statusConfig.phase === 4 ? 'line-through' : ''}`}>
                   {form.subject || '無採購項目'}
                 </h3>
                 
@@ -77,7 +79,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
               <div className="flex flex-col items-end gap-3">
                 <div className="text-right">
                   <div className="text-xs text-slate-400">總金額</div>
-                  <div className="font-bold text-blue-600 text-lg">
+                  <div className={`font-bold text-lg ${statusConfig.phase === 4 ? 'text-slate-400 line-through' : 'text-blue-600'}`}>
                     ${(form.totalPrice || 0).toLocaleString()}
                   </div>
                 </div>
@@ -91,15 +93,35 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
       {isExpanded && (
         <div className="px-4 pb-4 pt-0 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200 relative">
           
-          <button 
-               onClick={() => onAction('edit', form)}
-               className="absolute top-4 right-4 p-2 bg-white text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 hover:shadow-md transition-all z-10"
-               title="修改內容"
-          >
-             <Edit2 size={18} />
-          </button>
+          {/* ★ 手機版展開後的按鈕區塊 */}
+          <div className="flex justify-end gap-2 pt-3 pb-1">
+              {statusConfig.phase !== 4 && (
+                  <>
+                     <button 
+                        onClick={() => onAction('void_and_replace', form)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 transition-all text-sm font-bold shadow-sm"
+                     >
+                        <Copy size={14} /> 換單作廢
+                     </button>
+                     <button 
+                        onClick={() => onAction('edit', form)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 transition-all text-sm font-bold shadow-sm"
+                     >
+                        <Edit2 size={14} /> 修改
+                     </button>
+                  </>
+              )}
+              {statusConfig.phase === 4 && (
+                   <button 
+                      onClick={() => onAction('undo_void', form)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-600 border border-emerald-200 rounded-full hover:bg-emerald-50 transition-all text-sm font-bold shadow-sm"
+                   >
+                      <RotateCcw size={14} /> 解除作廢
+                   </button>
+              )}
+          </div>
           
-          <div className="py-3 space-y-3 text-base">
+          <div className="py-2 space-y-3 text-base">
             <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
               <div>
                 <span className="text-xs text-slate-400 block mb-1">申請日期</span>
@@ -120,7 +142,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
             </div>
 
             {form.globalRemark && (
-              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-yellow-900 text-sm">
+              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-yellow-900 text-sm whitespace-pre-wrap">
                 <strong>備註：</strong> {form.globalRemark}
               </div>
             )}
@@ -132,7 +154,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
                   <div key={idx} className="pl-3 relative">
                     <div className="absolute -left-[13px] top-1.5 w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-400"></div>
                     <div className="text-xs text-slate-400">{formatLocalTime(log.timestamp)}</div>
-                    <div className="text-base font-medium text-slate-800">{log.note || log.status}</div>
+                    <div className="text-base font-medium text-slate-800 whitespace-pre-wrap">{log.note || log.status}</div>
                     <div className="text-xs text-slate-500">操作: {log.operator}</div>
                   </div>
                 ))}

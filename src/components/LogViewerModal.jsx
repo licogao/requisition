@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Activity, RefreshCw, Clock, User, FileText, Monitor, ArrowDownCircle } from 'lucide-react';
-import { collection, query, orderBy, limit, getDocs, startAfter } from 'firebase/firestore';
+import { X, Activity, RefreshCw, Clock, User, FileText, Monitor, ArrowDownCircle, Trash2 } from 'lucide-react';
+import { collection, query, orderBy, limit, getDocs, startAfter, writeBatch } from 'firebase/firestore';
 import { LOG_TYPES } from '../logger';
+import { DEFAULT_DOMAIN } from '../constants';
 
-// 日誌類型對應的圖示與顏色
+const ADMIN_EMAILS = [`268${DEFAULT_DOMAIN}`];
+
 const TYPE_CONFIG = {
   [LOG_TYPES.LOGIN]: { icon: <User size={16} />, color: 'bg-green-100 text-green-700 border-green-200', label: '登入' },
   [LOG_TYPES.LOGOUT]: { icon: <User size={16} />, color: 'bg-slate-100 text-slate-600 border-slate-200', label: '登出' },
@@ -17,14 +19,15 @@ const TYPE_CONFIG = {
   'DEFAULT': { icon: <Monitor size={16} />, color: 'bg-slate-100 text-slate-700 border-slate-200', label: '系統' }
 };
 
-const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
+const LogViewerModal = ({ isOpen, onClose, db, appId, user }) => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  
   const PAGE_SIZE = 50;
-
-  // 載入日誌
+  
+  const isAdmin = user && ADMIN_EMAILS.includes(user.email);
   const fetchLogs = async (isRefresh = false) => {
     if (loading) return;
     setLoading(true);
@@ -57,6 +60,44 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
     }
   };
 
+  const handleClearLogs = async () => {
+    if (!window.confirm('⚠️ 警告：確定要清空「所有」系統日誌嗎？\n此動作將無法復原！')) return;
+
+    setLoading(true);
+    try {
+      const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'logs'));
+      const snapshot = await getDocs(q);
+      const batches = [];
+      let currentBatch = writeBatch(db);
+      let count = 0;
+
+      snapshot.docs.forEach((docSnap) => {
+        currentBatch.delete(docSnap.ref);
+        count++;
+        if (count % 500 === 0) {
+          batches.push(currentBatch.commit());
+          currentBatch = writeBatch(db);
+        }
+      });
+      
+      if (count % 500 !== 0) {
+        batches.push(currentBatch.commit());
+      }
+
+      await Promise.all(batches);
+      
+      setLogs([]);
+      setLastDoc(null);
+      setHasMore(false);
+      alert(`✅ 成功清空 ${count} 筆系統日誌！`);
+    } catch (err) {
+      console.error('Clear logs error:', err);
+      alert('清空日誌失敗，請檢查網路連線。');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       fetchLogs(true);
@@ -68,8 +109,6 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
   return (
     <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col h-[85vh] md:h-[80vh]">
-        
-        {/* Header */}
         <div className="p-4 md:p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl shrink-0">
           <div>
             <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -78,6 +117,18 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
             <p className="text-xs md:text-sm text-slate-500 mt-1">記錄所有使用者的重要操作行為</p>
           </div>
           <div className="flex gap-2">
+            {isAdmin && (
+              <button 
+                onClick={handleClearLogs} 
+                disabled={loading}
+                className="flex items-center gap-1.5 p-2 px-3 text-red-500 bg-white border border-red-200 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all disabled:opacity-50 shadow-sm"
+                title="清空所有日誌"
+              >
+                <Trash2 size={18} />
+                <span className="hidden sm:inline text-sm font-bold">清空日誌</span>
+              </button>
+            )}
+
             <button 
               onClick={() => fetchLogs(true)} 
               className="p-2 hover:bg-white rounded-lg text-slate-500 border border-transparent hover:border-slate-200 hover:shadow-sm transition-all"
@@ -91,10 +142,7 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
           </div>
         </div>
 
-        {/* Content Body */}
         <div className="flex-1 overflow-y-auto bg-slate-50/50 p-2 md:p-0">
-          
-          {/* 電腦版表格 (md:table) */}
           <table className="w-full text-left hidden md:table">
             <thead className="bg-slate-50 text-sm text-slate-600 font-bold border-b sticky top-0 shadow-sm z-10">
               <tr>
@@ -129,7 +177,6 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
             </tbody>
           </table>
 
-          {/* 手機版卡片清單 (md:hidden) */}
           <div className="md:hidden space-y-3 p-2">
             {logs.map(log => {
               const config = TYPE_CONFIG[log.action] || TYPE_CONFIG['DEFAULT'];
@@ -159,7 +206,6 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
             })}
           </div>
 
-          {/* Empty State */}
           {logs.length === 0 && !loading && (
             <div className="p-12 text-center text-slate-400">
               <Activity className="mx-auto mb-2 opacity-20" size={48} />
@@ -167,7 +213,6 @@ const LogViewerModal = ({ isOpen, onClose, db, appId }) => {
             </div>
           )}
 
-          {/* Load More */}
           {hasMore && (
             <div className="p-4 text-center">
               <button 

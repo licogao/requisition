@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Clock, PlayCircle, CheckCircle, AlertCircle, ArrowRight, RotateCcw, XCircle, Edit2, FileText, User, Building, Briefcase, Truck, CheckSquare 
+  Clock, PlayCircle, CheckCircle, AlertCircle, ArrowRight, RotateCcw, XCircle, Edit2, FileText, User, Building, Briefcase, Truck, CheckSquare, Copy, Ban 
 } from 'lucide-react';
 
 const isoToMinguo = (isoDateStr) => {
@@ -18,6 +18,7 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
     if (phase === 1) return 'bg-blue-100 text-blue-700 border-blue-200';
     if (phase === 2) return 'bg-orange-100 text-orange-700 border-orange-200';
     if (phase === 3) return 'bg-slate-900 text-white border-slate-700';
+    if (phase === 4) return 'bg-slate-200 text-slate-500 border-slate-300';
     return 'bg-slate-100 text-slate-700 border-slate-200';
   };
 
@@ -25,6 +26,7 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
     if (phase === 1) return <PlayCircle size={16} />;
     if (phase === 2) return <Clock size={16} />;
     if (phase === 3) return <CheckCircle size={16} />;
+    if (phase === 4) return <Ban size={16} />;
     return <AlertCircle size={16} />;
   };
 
@@ -53,12 +55,13 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
   const getLogTextColor = (note) => {
       if (note?.includes('退回')) return 'text-red-600 font-bold';
       if (note?.includes('領回')) return 'text-purple-600 font-bold';
+      if (note?.includes('作廢')) return 'text-slate-400 font-bold line-through';
       return 'text-slate-900 font-medium'; 
   };
 
   return (
     <>
-      <tr className={`border-b border-slate-100 hover:bg-blue-50/50 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''} ${form.isUrgent ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50/50'}`}>
+      <tr className={`border-b border-slate-100 hover:bg-blue-50/50 transition-colors ${isExpanded ? 'bg-blue-50/30' : ''} ${form.isUrgent ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50/50'} ${statusConfig.phase === 4 ? 'opacity-60 grayscale-[50%]' : ''}`}>
         <td className="p-4 text-center w-12">
           <input 
             type="checkbox" 
@@ -80,9 +83,11 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
         </td>
 
         <td className="p-4 align-top cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : form.id)}>
-          <div className="font-bold text-slate-800 text-lg mb-1 line-clamp-2">{form.subject}</div>
+          <div className={`font-bold text-slate-800 text-lg mb-1 line-clamp-2 ${statusConfig.phase === 4 ? 'line-through' : ''}`}>{form.subject}</div>
           <div className="flex items-center gap-2 text-sm text-slate-500 flex-wrap">
-            <span className="bg-slate-100 px-2 py-0.5 rounded text-xs">預算: ${parseInt(form.totalPrice || 0).toLocaleString()}</span>
+            <span className="bg-slate-100 px-2 py-0.5 rounded text-xs">
+               預算: <span className={statusConfig.phase === 4 ? 'line-through text-slate-400' : ''}>${parseInt(form.totalPrice || 0).toLocaleString()}</span>
+            </span>
             {form.subsidy && <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs border border-green-100">{form.subsidy}</span>}
           </div>
           {form.vendor && <div className="text-xs text-slate-400 mt-1">廠商: {form.vendor}</div>}
@@ -146,16 +151,40 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
             <div className="flex flex-col md:flex-row">
                
                <div className="flex-1 p-6 relative">
-                  <button 
-                     onClick={(e) => { e.stopPropagation(); onAction('edit', form); }}
-                     className="absolute top-4 right-4 p-2 bg-white text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 hover:shadow-md transition-all z-10"
-                     title="編輯申請單"
-                  >
-                     <Edit2 size={18} />
-                  </button>
+                  
+                  {/* ★ 展開後右上角的專屬按鈕區塊 */}
+                  <div className="absolute top-4 right-4 flex gap-2 z-10">
+                      {statusConfig.phase !== 4 && (
+                          <>
+                             <button 
+                                onClick={(e) => { e.stopPropagation(); onAction('void_and_replace', form); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 hover:shadow-md transition-all text-sm font-bold shadow-sm"
+                                title="作廢並帶入新單"
+                             >
+                                <Copy size={16} /> 換單作廢
+                             </button>
+                             <button 
+                                onClick={(e) => { e.stopPropagation(); onAction('edit', form); }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 hover:shadow-md transition-all text-sm font-bold shadow-sm"
+                                title="編輯申請單"
+                             >
+                                <Edit2 size={16} /> 修改
+                             </button>
+                          </>
+                      )}
+                      {statusConfig.phase === 4 && (
+                           <button 
+                              onClick={(e) => { e.stopPropagation(); onAction('undo_void', form); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-600 border border-emerald-200 rounded-full hover:bg-emerald-50 hover:shadow-md transition-all text-sm font-bold shadow-sm"
+                              title="解除作廢並恢復"
+                           >
+                              <RotateCcw size={16} /> 解除作廢
+                           </button>
+                      )}
+                  </div>
 
-                  <h4 className="font-bold text-slate-700 text-xl mb-6 flex items-center gap-2 border-b border-slate-200 pb-3">
-                    <FileText size={24} className="text-blue-500" />
+                  <h4 className="font-bold text-slate-700 text-xl mb-6 flex items-center gap-2 border-b border-slate-200 pb-3 pr-48 mt-2 md:mt-0">
+                    <FileText size={24} className={statusConfig.phase === 4 ? 'text-slate-400' : 'text-blue-500'} />
                     申請單詳情 
                     <span className="text-base font-normal text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded font-mono ml-2">
                         {form.serialId}
@@ -208,7 +237,7 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
                     )}
                   </div>
 
-                  <div className="bg-white rounded border border-slate-200 overflow-hidden mb-4 shadow-sm">
+                  <div className={`bg-white rounded border border-slate-200 overflow-hidden mb-4 shadow-sm ${statusConfig.phase === 4 ? 'opacity-60' : ''}`}>
                     <table className="w-full text-base">
                       <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                         <tr>
@@ -221,7 +250,7 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
                       <tbody className="divide-y divide-slate-100">
                         {(form.items || []).map((item, idx) => (
                           <tr key={idx}>
-                            <td className="p-3 text-slate-800 font-medium">{item.subject}</td>
+                            <td className={`p-3 text-slate-800 font-medium ${statusConfig.phase === 4 ? 'line-through' : ''}`}>{item.subject}</td>
                             <td className="p-3 text-right font-mono text-slate-600">${parseInt(item.unitPrice).toLocaleString()}</td>
                             <td className="p-3 text-center text-slate-700">{item.quantity} {item.measureUnit}</td>
                             <td className="p-3 text-right font-bold text-slate-900">${parseInt(item.subtotal).toLocaleString()}</td>
@@ -229,14 +258,14 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
                         ))}
                         <tr className="bg-slate-50/50 font-bold border-t border-slate-200">
                             <td colSpan="3" className="p-3 text-right text-slate-600">總金額</td>
-                            <td className="p-3 text-right text-blue-700 text-xl">${parseInt(form.totalPrice || 0).toLocaleString()}</td>
+                            <td className={`p-3 text-right text-xl ${statusConfig.phase === 4 ? 'text-slate-400 line-through' : 'text-blue-700'}`}>${parseInt(form.totalPrice || 0).toLocaleString()}</td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
 
                   {form.globalRemark && (
-                    <div className="bg-yellow-50 p-4 rounded border border-yellow-200 text-yellow-900 text-base flex gap-3 items-start">
+                    <div className="bg-yellow-50 p-4 rounded border border-yellow-200 text-yellow-900 text-base flex gap-3 items-start whitespace-pre-wrap">
                       <strong className="shrink-0 bg-yellow-100 px-2 py-0.5 rounded text-sm text-yellow-800">備註</strong>
                       <span className="leading-relaxed">{form.globalRemark}</span>
                     </div>
@@ -258,7 +287,7 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
                                 {formatMinguoTime(log.timestamp)}
                             </span>
                             
-                            <div className={`text-base ${getLogTextColor(log.note || log.status)}`}>
+                            <div className={`text-base whitespace-pre-wrap ${getLogTextColor(log.note || log.status)}`}>
                                 {log.note || log.status}
                             </div>
                             
