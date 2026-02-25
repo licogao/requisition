@@ -44,13 +44,11 @@ export const useSettings = (user) => {
   const checkAndSaveNewOptions = async ({ newUnit, newApplicant, newSubsidy, newVendor }) => {
     const updateData = {};
     
-    // 檢查單位
     const trimmedUnit = newUnit?.trim();
     if (trimmedUnit && !unitOptions.includes(trimmedUnit) && window.confirm(`是否將「${trimmedUnit}」加入常用單位？`)) {
         updateData.units = [...unitOptions, trimmedUnit];
     }
 
-    // 檢查申請人
     const trimmedApplicant = newApplicant?.trim();
     if (trimmedUnit && trimmedApplicant) {
         const currentUnitApplicants = applicantOptions[trimmedUnit] || [];
@@ -62,19 +60,16 @@ export const useSettings = (user) => {
         }
     }
 
-    // 檢查計畫
     const trimmedSubsidy = newSubsidy?.trim();
     if (trimmedSubsidy && !projectOptions.includes(trimmedSubsidy) && trimmedSubsidy !== '無計畫 (公務)' && window.confirm(`是否將「${trimmedSubsidy}」加入常用計畫？`)) {
         updateData.projects = [...projectOptions, trimmedSubsidy];
     }
     
-    // 檢查廠商
     const trimmedVendor = newVendor?.trim();
     if (trimmedVendor && !vendorOptions.includes(trimmedVendor) && window.confirm(`是否將「${trimmedVendor}」加入常用廠商？`)) {
         updateData.vendors = [...vendorOptions, trimmedVendor];
     }
 
-    // 執行寫入
     if (Object.keys(updateData).length > 0) {
         try {
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_settings', 'config1'), updateData, { merge: true });

@@ -29,15 +29,12 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
             groups[key].items.push(f);
         });
 
-        // 依月份倒序排列
         return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
     }, [forms]);
 
     return (
       <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border-4 border-red-500 overflow-hidden">
-            
-            {/* Header */}
             <div className="p-6 border-b flex justify-between items-center bg-red-50 shrink-0 z-10 relative">
               <h3 className="text-xl font-black text-red-700 flex items-center gap-2">
                   <AlertTriangle className="w-6 h-6" />
@@ -46,7 +43,6 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
               <button onClick={onClose}><X className="w-6 h-6 text-slate-400 hover:text-slate-600" /></button>
             </div>
 
-            {/* Warning */}
             <div className="p-6 pb-0 shrink-0 bg-white z-10 relative">
                 <div className="bg-red-50 p-4 rounded-lg text-sm text-red-800 border border-red-200 shadow-sm">
                     <p className="font-bold mb-2 flex items-center gap-2">
@@ -60,7 +56,6 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
                 </div>
             </div>
 
-            {/* List */}
             <div className="p-6 overflow-y-auto flex-1 bg-white">
                 {groupedData.length === 0 ? (
                     <div className="text-center text-slate-400 py-10">目前沒有進行中的資料</div>
@@ -93,7 +88,6 @@ const DebugClearModal = ({ isOpen, onClose, forms, onDeleteMonth }) => {
                 )}
             </div>
             
-            {/* Footer */}
             <div className="p-4 border-t bg-slate-50 flex justify-end shrink-0">
                 <button onClick={onClose} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg">關閉</button>
             </div>

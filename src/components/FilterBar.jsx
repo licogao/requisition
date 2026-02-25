@@ -13,7 +13,6 @@ const FilterBar = ({
 }) => {
   return (
     <div className="mb-6 bg-white p-4 rounded-xl shadow-sm space-y-4">
-      {/* 第一排：搜尋與月份 */}
       <div className="flex flex-col md:flex-row gap-4 items-stretch">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -52,7 +51,6 @@ const FilterBar = ({
         </div>
       </div>
 
-      {/* 第二排：進階篩選 */}
       <div className="flex flex-col md:flex-row gap-4 items-center border-t border-slate-100 pt-4">
         <div className="flex items-center gap-2 w-full md:w-auto text-sm text-slate-500 font-bold whitespace-nowrap">
           <Filter size={16} /> 進階篩選:
@@ -94,7 +92,6 @@ const FilterBar = ({
         </div>
 
         <div className="flex gap-2 ml-auto">
-          {/* ★ 修正：確保只有在「第三輪 (已結案)」時才出現，作廢頁面不出現 */}
           {filterPhase === 'phase3' && (
             <button 
               onClick={onManageCompleted} 

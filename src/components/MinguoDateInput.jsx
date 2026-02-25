@@ -18,7 +18,7 @@ const MinguoDateInput = ({ value, onChange, className = "" }) => {
                 value={value || ''} 
                 onChange={(e) => onChange(e.target.value)} 
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 date-full-trigger"
-                style={{ opacity: 0 }} // Ensure it's invisible but clickable
+                style={{ opacity: 0 }}
               />
               <style>{`
                 .date-full-trigger::-webkit-calendar-picker-indicator {

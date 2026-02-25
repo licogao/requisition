@@ -111,8 +111,6 @@ export const generateCSV = (dataToExport) => {
       const appDateStr = isoToMinguo(f.applicationDate);
       const statusStr = STATUS_STEPS[f.status]?.label || f.status;
       const statusTimeStr = f.updatedAt?.toDate ? formatDate(f.updatedAt.toDate().toISOString()) : '-';
-      
-      // ★ 防呆：作廢單據金額一律輸出 0
       const isVoided = f.status === 'VOIDED';
       const finalTotalPrice = isVoided ? 0 : f.totalPrice;
 

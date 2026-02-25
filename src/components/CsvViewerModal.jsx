@@ -1,14 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { X, Upload, FileSpreadsheet, Search, Trash2, AlertCircle, Filter } from 'lucide-react';
 
-// ★ 升級版：完整的 CSV 解析器 (能正確處理雙引號內的換行，避免破壞表格)
 const parseCSV = (text) => {
   const rows = [];
   let currentRow = [];
   let currentVal = '';
   let inQuotes = false;
 
-  // 移除檔案開頭的 BOM (避免亂碼)
   if (text.charCodeAt(0) === 0xFEFF) {
     text = text.slice(1);
   }
@@ -20,18 +18,16 @@ const parseCSV = (text) => {
     if (char === '"') {
       if (inQuotes && nextChar === '"') {
         currentVal += '"';
-        i++; // 處理連續雙引號 (跳脫字元)
+        i++;
       } else {
         inQuotes = !inQuotes;
       }
     } else if (char === ',' && !inQuotes) {
-      // 遇到逗號且不在引號內，代表一個欄位結束
       currentRow.push(currentVal);
       currentVal = '';
     } else if ((char === '\n' || char === '\r') && !inQuotes) {
-      // 遇到換行且不在引號內，代表一列結束
       if (char === '\r' && nextChar === '\n') {
-        i++; // 處理 Windows 的 \r\n
+        i++;
       }
       currentRow.push(currentVal);
       if (currentRow.length > 1 || currentRow[0].trim() !== '') {
@@ -44,7 +40,6 @@ const parseCSV = (text) => {
     }
   }
   
-  // 處理最後一行沒有換行符號的情況
   if (currentVal !== '' || currentRow.length > 0) {
     currentRow.push(currentVal);
     if (currentRow.length > 1 || currentRow[0].trim() !== '') {
@@ -54,7 +49,6 @@ const parseCSV = (text) => {
   return rows;
 };
 
-// 定義期望的欄位排序順序
 const PREFERRED_ORDER = [
   '流水號', '原申請單日期', '申請單日期', '申請日期', '建立時間', '是否速件',
   '申請單位', '申請人', '廠商', '品項名稱',
@@ -124,14 +118,11 @@ const CsvViewerModal = ({ isOpen, onClose }) => {
     reader.onload = (event) => {
       try {
         const text = event.target.result;
-        // 使用新的 parseCSV 一次性解析全文
         const allRows = parseCSV(text);
         
         if (allRows.length > 0) {
-          // 原始表頭，用來對應資料
           const originalHeaders = allRows[0].map(h => h.trim());
           
-          // 強制排序後的表頭，用來顯示
           const parsedHeaders = [...originalHeaders];
           parsedHeaders.sort((a, b) => {
             let indexA = PREFERRED_ORDER.indexOf(a);
@@ -142,7 +133,6 @@ const CsvViewerModal = ({ isOpen, onClose }) => {
             return indexA - indexB;
           });
 
-          // 組裝資料
           const parsedData = allRows.slice(1).map(rowValues => {
             return originalHeaders.reduce((obj, header, index) => {
               obj[header] = rowValues[index] !== undefined ? rowValues[index] : '';
@@ -183,7 +173,6 @@ const CsvViewerModal = ({ isOpen, onClose }) => {
     <div className="fixed inset-0 z-[1500] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] flex flex-col h-[90vh]">
         
-        {/* Header */}
         <div className="p-4 md:p-6 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-emerald-100 text-emerald-700 rounded-lg">
@@ -199,7 +188,6 @@ const CsvViewerModal = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-hidden flex flex-col bg-slate-100/50">
           {csvData.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8">
@@ -214,7 +202,6 @@ const CsvViewerModal = ({ isOpen, onClose }) => {
             </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* 工具列 */}
               <div className="p-4 bg-white border-b border-slate-200 flex flex-col lg:flex-row justify-between items-center gap-4 shrink-0 shadow-sm z-10">
                 
                 <div className="flex items-center gap-3 w-full lg:w-auto">
@@ -265,7 +252,6 @@ const CsvViewerModal = ({ isOpen, onClose }) => {
                 </div>
               </div>
 
-              {/* 報表表格 */}
               <div className="flex-1 overflow-auto bg-white relative">
                 {filteredData.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-slate-400">
@@ -300,10 +286,8 @@ const CsvViewerModal = ({ isOpen, onClose }) => {
                     </thead>
                     <tbody>
                       {filteredData.map((row, rowIdx) => {
-                        // ★ 判斷是否為作廢單據
                         const isVoided = String(row['目前狀態'] || '').includes('作廢');
                         
-                        // ★ 決定背景樣式：作廢統一用淺灰及淡化效果，否則維持交替色
                         const trBgClass = isVoided ? 'bg-slate-100 opacity-70' : rowColors[rowIdx];
                         
                         return (
@@ -323,18 +307,15 @@ const CsvViewerModal = ({ isOpen, onClose }) => {
                                 tdWidthClass = 'max-w-[200px] w-[180px] min-w-[150px]';
                               }
                               
-                              // 格式化金額與文字換行
                               if (isCurrency && cellValue !== undefined && cellValue !== '') {
                                   const num = parseFloat(String(cellValue).replace(/,/g, ''));
                                   if (!isNaN(num)) {
                                       cellValue = `$${num.toLocaleString('en-US')}`;
                                   }
                               } else if (typeof cellValue === 'string') {
-                                  // 將作廢原因的 \n 替換成 / 讓畫面維持單行，保持整潔
                                   cellValue = cellValue.replace(/\n/g, ' / ');
                               }
 
-                              // ★ 根據是否作廢決定文字顏色與刪除線
                               const textColorClass = isVoided ? 'text-slate-400 line-through' : 'text-slate-700';
 
                               return (

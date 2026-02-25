@@ -43,7 +43,6 @@ const GlobalModal = ({ modal, onClose, onConfirm, unitOptions = [], applicantOpt
     onClose();
   }, [modal, note, pickupName, onConfirm, onClose]);
 
-  // 鍵盤事件監聽
   useEffect(() => {
     if (!modal.isOpen) return;
 
@@ -56,11 +55,8 @@ const GlobalModal = ({ modal, onClose, onConfirm, unitOptions = [], applicantOpt
       if (e.key === 'Enter') {
         const target = e.target;
         const isTextarea = target.tagName.toLowerCase() === 'textarea';
-        
-        // 備註欄換行防呆
+
         if (isTextarea && !e.ctrlKey && !e.metaKey) return; 
-        
-        // 按鈕預設會觸發 click，避免重複執行
         if (target.tagName.toLowerCase() === 'button') return;
 
         e.preventDefault();

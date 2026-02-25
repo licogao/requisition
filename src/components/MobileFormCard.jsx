@@ -92,8 +92,6 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
 
       {isExpanded && (
         <div className="px-4 pb-4 pt-0 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200 relative">
-          
-          {/* ★ 手機版展開後的按鈕區塊 */}
           <div className="flex justify-end gap-2 pt-3 pb-1">
               {statusConfig.phase !== 4 && (
                   <>

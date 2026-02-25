@@ -20,7 +20,6 @@ export const useBatchActions = ({
     setEditingFormId, setIsFormOpen
   } = formSetters;
 
-  // ★ 換單作廢核心邏輯 (支援單筆與合併)
   const handleVoidAndReplace = async (formsToVoid, reason) => {
       const batch = writeBatch(db);
       const timestamp = new Date().toISOString();
@@ -29,7 +28,6 @@ export const useBatchActions = ({
 
       formsToVoid.forEach(form => {
           const ref = doc(db, 'artifacts', appId, 'public', 'data', 'school_forms', form.id);
-          // 1. 更新舊單為作廢狀態
           batch.update(ref, {
               status: 'VOIDED',
               logs: [...(form.logs || []), { status: 'VOIDED', timestamp, note: `已作廢並換單 [原因: ${reason}]`, operator: getOperatorName(user) }],
@@ -37,7 +35,6 @@ export const useBatchActions = ({
               time_VOIDED: timestamp
           });
 
-          // 2. 收集所有舊單的品項，準備給新單用
           if (form.items && form.items.length > 0) {
               const itemsToAdd = form.items.map((i, idx) => ({...i, id: Date.now() + Math.random() + idx}));
               combinedItems = [...combinedItems, ...itemsToAdd];
@@ -47,17 +44,15 @@ export const useBatchActions = ({
       });
 
       try {
-          // 送出作廢
           await batch.commit();
           logAction(db, appId, user, LOG_TYPES.STATUS_CHANGE, `作廢單據: ${serials} [原因: ${reason}]`);
 
-          // 3. 預先填入新單據的資料
           const firstForm = formsToVoid[0];
           setNewUnit(firstForm.unit || '');
           setNewApplicant(firstForm.applicant || '');
           setNewSubsidy(firstForm.subsidy || '');
           setNewVendor(firstForm.vendor || '');
-          setIsUrgent(formsToVoid.some(f => f.isUrgent)); // 只要有一張是速件，新單也是速件
+          setIsUrgent(formsToVoid.some(f => f.isUrgent));
 
           const existingRemark = firstForm.globalRemark ? `${firstForm.globalRemark}\n\n` : '';
           setNewGlobalRemark(`${existingRemark}※ 由舊單號 ${serials} 換單而來。\n作廢原因：${reason}`);
@@ -68,11 +63,10 @@ export const useBatchActions = ({
               setNewItems([{ id: Date.now(), subject: '', quantity: 1, measureUnit: '個', unitPrice: '' }]);
           }
 
-          // 4. 打開新增表單畫面
           setIsEditMode(false);
           setEditingFormId(null);
           setIsFormOpen(true);
-          setSelectedIds(new Set()); // 清空勾選
+          setSelectedIds(new Set());
 
       } catch (error) {
           console.error("Void and replace error:", error);
@@ -80,7 +74,6 @@ export const useBatchActions = ({
       }
   };
 
-  // ★ 處理底部的批量操作分配
   const handleBatchAction = (actionType) => {
     if (selectedIds.size === 0) return;
     const targets = forms.filter(f => selectedIds.has(f.id));

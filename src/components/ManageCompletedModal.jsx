@@ -1,15 +1,12 @@
 import React, { useMemo } from 'react';
-// ★ 修改：引入 FileSpreadsheet 與 FileJson 圖示
 import { Download, Trash2, X, AlertTriangle, FolderCog, Lock, CheckCircle2, FileSpreadsheet, FileJson } from 'lucide-react';
 
 const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport, onExportMonth, statusSteps }) => {
   
-  // 使用 useMemo 快取分組與計算邏輯，提升效能
   const { sortedKeys, grouped } = useMemo(() => {
     const groups = {};
 
     forms.forEach(f => {
-      // 1. 決定分組的月份基準 (優先使用建立時間，確保同批單據歸在同個月)
       let dateObj;
       if (f.createdAt?.toDate) {
           dateObj = f.createdAt.toDate();
@@ -30,18 +27,14 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
       if (!groups[key]) {
         groups[key] = { all: [], archivable: [] };
       }
-
-      // 2. 將單據放入總池
       groups[key].all.push(f);
 
-      // 3. 判斷是否「可歸檔」(Phase 3 結案 或 Phase 4 作廢 均視為 OK)
       const phase = statusSteps?.[f.status]?.phase;
       if (phase === 3 || phase === 4) {
         groups[key].archivable.push(f);
       }
     });
 
-    // 排序月份 (由新到舊)
     const keys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
     return { sortedKeys: keys, grouped: groups };
   }, [forms, statusSteps]);
@@ -51,7 +44,6 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
-        {/* Header */}
         <div className="p-4 md:p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl shrink-0">
           <div>
             <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -66,7 +58,6 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
           
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start gap-3">
@@ -83,7 +74,6 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
             sortedKeys.map(monthKey => {
               const totalCount = grouped[monthKey].all.length;
               const archivableCount = grouped[monthKey].archivable.length;
-              // 必須 100% 的單據都處於結案或作廢狀態，才會解鎖
               const isUnlocked = totalCount > 0 && totalCount === archivableCount;
 
               return (
@@ -106,7 +96,6 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
                     </div>
                   </div>
                   
-                  {/* ★ 修改：新增獨立的 CSV 與 JSON 匯出按鈕，並與刪除按鈕並列 */}
                   <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                     <button 
                       onClick={() => onExportMonth(monthKey, grouped[monthKey].all, 'csv')}
@@ -147,7 +136,6 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t bg-slate-50 rounded-b-xl flex flex-col-reverse sm:flex-row justify-between items-center gap-3 sm:gap-0 shrink-0">
             <button 
               onClick={onExport}
