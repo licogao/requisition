@@ -12,7 +12,7 @@ import { useSettings } from './hooks/useSettings';
 import { useForms } from './hooks/useForms';
 import { useBatchActions } from './hooks/useBatchActions'; 
 import { useFormState } from './hooks/useFormState'; 
-import { useDataTransfer } from './hooks/useDataTransfer'; // ★ 引入第三階段 Hook
+import { useDataTransfer } from './hooks/useDataTransfer';
 
 import LoginPage from './components/LoginPage';
 import MinguoDateInput from './components/MinguoDateInput';
