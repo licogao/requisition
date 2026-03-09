@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Plus, Search } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, Plus } from 'lucide-react';
 
 const SearchableSelect = ({ options = [], value, onChange, placeholder, onCustomClick }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const wrapperRef = useRef(null);
 
   useEffect(() => {
@@ -17,65 +17,67 @@ const SearchableSelect = ({ options = [], value, onChange, placeholder, onCustom
   }, []);
 
   const filteredOptions = options.filter(opt => 
-    String(opt).toLowerCase().includes(search.toLowerCase())
+    opt.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="relative w-full" ref={wrapperRef}>
+    <div ref={wrapperRef} className="relative w-full">
       <div 
-        className="w-full p-2 border border-slate-300 rounded-lg bg-white h-12 flex items-center justify-between cursor-pointer focus-within:ring-2 focus-within:ring-blue-500"
+        className="w-full p-3 border border-slate-300 rounded-lg h-14 text-lg bg-white flex items-center cursor-pointer justify-between transition-colors hover:border-blue-400"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <span className={`block truncate text-lg ${!value ? 'text-slate-400' : 'text-slate-700'}`}>
+        <span className={value ? "text-slate-800" : "text-slate-400"}>
           {value || placeholder}
         </span>
-        <ChevronDown size={20} className="text-slate-400" />
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-          <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
-            <Search size={18} className="text-slate-400" />
-            <input
-              type="text"
-              className="w-full bg-transparent outline-none text-lg text-slate-700 placeholder:text-slate-400"
-              placeholder="搜尋..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoFocus
-            />
+        // ★ 這裡將最大高度修改為 max-h-[250px]
+        <div className="absolute z-[3000] w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-[250px] overflow-y-auto">
+          <div className="p-2 sticky top-0 bg-white border-b border-slate-100 z-10">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                type="text"
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:bg-white transition-colors"
+                placeholder="搜尋..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+              />
+            </div>
           </div>
-
-          <div className="max-h-64 overflow-y-auto"> 
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((opt, i) => (
-                <div
-                  key={i}
-                  className={`p-3 text-lg cursor-pointer hover:bg-blue-50 transition-colors border-b border-slate-50 last:border-0 ${value === opt ? 'bg-blue-50 text-blue-600 font-bold' : 'text-slate-700'}`}
-                  onClick={() => {
-                    onChange(opt);
-                    setIsOpen(false);
-                    setSearch('');
-                  }}
-                >
-                  {opt}
-                </div>
-              ))
-            ) : (
-              <div className="p-4 text-center text-sm text-slate-400">無符合項目</div>
-            )}
-          </div>
-
+          
           {onCustomClick && (
             <div 
-              className="p-3 border-t border-slate-100 bg-slate-50 text-blue-600 text-lg font-bold cursor-pointer hover:bg-blue-100 flex items-center justify-center gap-2 transition-colors"
+              className="p-3 text-blue-600 hover:bg-blue-50 flex items-center gap-2 cursor-pointer border-b border-slate-100 font-bold transition-colors"
               onClick={() => {
-                onCustomClick(search); 
+                onCustomClick(searchTerm);
                 setIsOpen(false);
+                setSearchTerm('');
               }}
             >
-              <Plus size={18} /> 手動輸入{search ? `「${search}」` : ''}
+              <Plus size={18} /> 新增自訂: {searchTerm || '...'}
             </div>
+          )}
+
+          {filteredOptions.length === 0 ? (
+            <div className="p-3 text-slate-400 text-center text-sm">找不到符合的項目</div>
+          ) : (
+            filteredOptions.map(opt => (
+              <div
+                key={opt}
+                className="p-3 hover:bg-blue-50 cursor-pointer text-slate-700 transition-colors"
+                onClick={() => {
+                  onChange(opt);
+                  setIsOpen(false);
+                  setSearchTerm('');
+                }}
+              >
+                {opt}
+              </div>
+            ))
           )}
         </div>
       )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { updateDoc, doc, query, deleteDoc, getDocs, where, serverTimestamp } from 'firebase/firestore'; 
+import { updateDoc, doc, query, deleteDoc, getDocs, where, serverTimestamp, collection } from 'firebase/firestore'; 
 import { Plus, Search, Flame, Filter, Edit2, Upload, Download, FileText, Clock, FolderCog, ShoppingCart, X, Loader2, Box, FileJson, FileSpreadsheet, Cloud, Copy, ArrowRight, RotateCcw, UserCheck, CheckCheck, CheckSquare } from 'lucide-react';
 
 import { db, appId } from './firebase'; 
@@ -12,7 +12,7 @@ import { useSettings } from './hooks/useSettings';
 import { useForms } from './hooks/useForms';
 import { useBatchActions } from './hooks/useBatchActions'; 
 import { useFormState } from './hooks/useFormState'; 
-import { useDataTransfer } from './hooks/useDataTransfer';
+import { useDataTransfer } from './hooks/useDataTransfer'; 
 
 import LoginPage from './components/LoginPage';
 import MinguoDateInput from './components/MinguoDateInput';
@@ -39,6 +39,7 @@ export default function App() {
   const { unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
+  // --- UI 與篩選器狀態 ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [monthTabs] = useState(generateMonthList());
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,11 +59,13 @@ export default function App() {
   const [expandedId, setExpandedId] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, type: 'alert', title: '', message: '' });
 
+  // ★ 呼叫第一階段 Hook (批量與作廢)
   const { handleBatchAction } = useBatchActions({
     db, appId, user, forms, selectedIds, setSelectedIds, setModal,
-    formSetters: useMemo(() => ({}), [])
+    formSetters: useMemo(() => ({}), []) 
   });
 
+  // ★ 呼叫第二階段 Hook (表單狀態)
   const {
     newUnit, setNewUnit, newApplicant, setNewApplicant,
     newSubsidy, setNewSubsidy, newVendor, setNewVendor,
@@ -78,7 +81,10 @@ export default function App() {
     unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions 
   });
 
+  // ★ 更新綁定 formSetters 給 useBatchActions 確保「合併換單」資料無縫帶入
   const batchActions = useBatchActions({ db, appId, user, forms, selectedIds, setSelectedIds, setModal, formSetters });
+
+  // ★ 呼叫第三階段 Hook (資料傳輸與彈窗管理)
   const {
     isExportModalOpen, showExportFormatSelect, setShowExportFormatSelect,
     isManageModalOpen, setIsManageModalOpen, isDebugClearOpen, setIsDebugClearOpen,
@@ -90,6 +96,7 @@ export default function App() {
     handleImportFile, handleManageCompleted, handleDebugClear, openAlert
   } = useDataTransfer({ db, appId, user, forms, setForms, setModal });
 
+  // 鎖定背景捲軸 Effect
   useEffect(() => {
     if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen || isDebugClearOpen || isLogViewerOpen || showExportFormatSelect || isCsvViewerOpen) {
       document.body.style.overflow = 'hidden';
@@ -121,12 +128,27 @@ export default function App() {
         openAlert('請輸入關鍵字', '請輸入流水號（例如 11201-01）或廠商名稱以進行雲端搜尋。', 'warning');
         return;
     }
+    
+    // 如果使用者尚未登入，不執行查詢，避免權限錯誤
+    if (!user) {
+        openAlert('未登入', '請先登入系統後再進行搜尋。', 'warning');
+        return;
+    }
+
     setIsSearchingCloud(true);
     try {
-        const qSerial = query(collection(db, 'artifacts', appId, 'public', 'data', 'school_forms'), where('serialId', '==', searchTerm.trim()));
-        const qSerialWithBrackets = query(collection(db, 'artifacts', appId, 'public', 'data', 'school_forms'), where('serialId', '==', `(${searchTerm.trim()})`));
+        const formsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'school_forms');
+        
+        // 嘗試加入更多容錯處理，確保查詢字串乾淨
+        const searchVal = searchTerm.trim();
+        const searchValWithBrackets = `(${searchVal})`;
+
+        const qSerial = query(formsCollectionRef, where('serialId', '==', searchVal));
+        const qSerialWithBrackets = query(formsCollectionRef, where('serialId', '==', searchValWithBrackets));
+
         const [snap1, snap2] = await Promise.all([getDocs(qSerial), getDocs(qSerialWithBrackets)]);
         const foundDocs = [];
+        
         snap1.forEach(d => foundDocs.push({id: d.id, ...d.data()}));
         snap2.forEach(d => { if (!foundDocs.some(f => f.id === d.id)) foundDocs.push({id: d.id, ...d.data()}); });
 
@@ -146,15 +168,20 @@ export default function App() {
             openAlert('查無資料', '在雲端資料庫中找不到符合該流水號的資料。', 'warning');
         }
     } catch (err) {
-        console.error("Cloud search error:", err);
-        openAlert('搜尋失敗', '連接資料庫時發生錯誤。', 'danger');
+        console.error("Cloud search error detailed:", err);
+        // 印出更詳細的錯誤訊息，方便除錯
+        const errorMsg = err.code === 'permission-denied' 
+            ? '權限不足，請確認您的帳號狀態。' 
+            : `連線失敗: ${err.message || '未知錯誤'}`;
+        openAlert('搜尋失敗', errorMsg, 'danger');
     } finally {
         setIsSearchingCloud(false);
     }
   };
 
   const filteredForms = useMemo(() => {
-    return forms.filter(form => {
+    const baseFiltered = forms.filter(form => {
+      // 被勾選的資料會無視篩選器，強制保留在清單中
       if (selectedIds.has(form.id)) return true;
 
       if (filterMonth !== 'all') {
@@ -187,8 +214,25 @@ export default function App() {
       
       return true;
     });
+
+    // ★ 新增：將篩選後的資料拆分為「已勾選」與「未勾選」，並將已勾選的排在最前面
+    const selected = [];
+    const unselected = [];
+    
+    baseFiltered.forEach(f => {
+      if (selectedIds.has(f.id)) {
+        selected.push(f);
+      } else {
+        unselected.push(f);
+      }
+    });
+
+    // 將兩組陣列合併回傳（原有的時間與流水號排序依然會被完美保留）
+    return [...selected, ...unselected];
+
   }, [forms, searchTerm, filterPhase, filterMonth, showUrgentOnly, filterVendor, filterStartDate, filterEndDate, selectedIds]); 
 
+  // 單一項目操作邏輯
   const handleActionClick = (type, form) => {
     if (type === 'edit') handleEditClick(form);
     else if (type === 'delete') {
@@ -255,11 +299,13 @@ export default function App() {
     }
   };
 
+  // --- 渲染畫面 ---
   if (authLoading) return (<div className="min-h-screen flex items-center justify-center bg-slate-100"><Clock className="text-blue-600 animate-spin" size={40} /></div>);
   if (!user) return (<LoginPage onLogin={handleLogin} loading={authLoading} error={authError} isPreview={false} onAnonymousLogin={handleAnonymousLogin} />);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans pb-20 md:pb-0">
+      {/* 所有的彈出式 Modal 與組件 */}
       <GlobalModal modal={modal} onClose={() => setModal({ ...modal, isOpen: false })} onConfirm={modal.onConfirm} unitOptions={unitOptions} applicantOptions={applicantOptions} />
       
       <ManageCompletedModal 
@@ -280,6 +326,7 @@ export default function App() {
       
       <CsvViewerModal isOpen={isCsvViewerOpen} onClose={() => setIsCsvViewerOpen(false)} />
 
+      {/* 匯出格式選擇彈窗 */}
       {showExportFormatSelect && (
         <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200">
@@ -305,6 +352,7 @@ export default function App() {
         </div>
       )}
 
+      {/* 新增/修改申請單的彈窗 */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-blue-200">
@@ -431,6 +479,7 @@ export default function App() {
         </div>
       )}
 
+      {/* 主畫面框架 */}
       <div className="max-w-7xl mx-auto p-4 md:p-6 text-center">
         
         <AppHeader 
@@ -516,6 +565,7 @@ export default function App() {
           )}
         </div>
         
+        {/* 底部懸浮操作列 */}
         {selectedIds.size > 0 && (
             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-blue-200 p-3 shadow-lg flex justify-center gap-4 items-center z-40">
                 <div className="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-2">
