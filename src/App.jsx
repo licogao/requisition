@@ -59,13 +59,11 @@ export default function App() {
   const [expandedId, setExpandedId] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, type: 'alert', title: '', message: '' });
 
-  // ★ 呼叫第一階段 Hook (批量與作廢)
   const { handleBatchAction } = useBatchActions({
     db, appId, user, forms, selectedIds, setSelectedIds, setModal,
     formSetters: useMemo(() => ({}), []) 
   });
 
-  // ★ 呼叫第二階段 Hook (表單狀態)
   const {
     newUnit, setNewUnit, newApplicant, setNewApplicant,
     newSubsidy, setNewSubsidy, newVendor, setNewVendor,
@@ -81,10 +79,8 @@ export default function App() {
     unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions 
   });
 
-  // ★ 更新綁定 formSetters 給 useBatchActions 確保「合併換單」資料無縫帶入
   const batchActions = useBatchActions({ db, appId, user, forms, selectedIds, setSelectedIds, setModal, formSetters });
 
-  // ★ 呼叫第三階段 Hook (資料傳輸與彈窗管理)
   const {
     isExportModalOpen, showExportFormatSelect, setShowExportFormatSelect,
     isManageModalOpen, setIsManageModalOpen, isDebugClearOpen, setIsDebugClearOpen,
@@ -129,7 +125,6 @@ export default function App() {
         return;
     }
     
-    // 如果使用者尚未登入，不執行查詢，避免權限錯誤
     if (!user) {
         openAlert('未登入', '請先登入系統後再進行搜尋。', 'warning');
         return;
@@ -139,7 +134,6 @@ export default function App() {
     try {
         const formsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'school_forms');
         
-        // 嘗試加入更多容錯處理，確保查詢字串乾淨
         const searchVal = searchTerm.trim();
         const searchValWithBrackets = `(${searchVal})`;
 
@@ -169,7 +163,6 @@ export default function App() {
         }
     } catch (err) {
         console.error("Cloud search error detailed:", err);
-        // 印出更詳細的錯誤訊息，方便除錯
         const errorMsg = err.code === 'permission-denied' 
             ? '權限不足，請確認您的帳號狀態。' 
             : `連線失敗: ${err.message || '未知錯誤'}`;
@@ -181,7 +174,6 @@ export default function App() {
 
   const filteredForms = useMemo(() => {
     const baseFiltered = forms.filter(form => {
-      // 被勾選的資料會無視篩選器，強制保留在清單中
       if (selectedIds.has(form.id)) return true;
 
       if (filterMonth !== 'all') {
@@ -215,7 +207,6 @@ export default function App() {
       return true;
     });
 
-    // ★ 新增：將篩選後的資料拆分為「已勾選」與「未勾選」，並將已勾選的排在最前面
     const selected = [];
     const unselected = [];
     

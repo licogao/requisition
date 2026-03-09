@@ -32,7 +32,6 @@ const SearchableSelect = ({ options = [], value, onChange, placeholder, onCustom
       </div>
 
       {isOpen && (
-        // ★ 這裡將最大高度修改為 max-h-[250px]
         <div className="absolute z-[3000] w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-[250px] overflow-y-auto">
           <div className="p-2 sticky top-0 bg-white border-b border-slate-100 z-10">
             <div className="relative">
