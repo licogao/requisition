@@ -39,7 +39,6 @@ export default function App() {
   const { unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
-  // --- UI 與篩選器狀態 ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [monthTabs] = useState(generateMonthList());
   const [searchTerm, setSearchTerm] = useState('');
@@ -133,7 +132,6 @@ export default function App() {
     setIsSearchingCloud(true);
     try {
         const formsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'school_forms');
-        
         const searchVal = searchTerm.trim();
         const searchValWithBrackets = `(${searchVal})`;
 
@@ -218,7 +216,6 @@ export default function App() {
       }
     });
 
-    // 將兩組陣列合併回傳（原有的時間與流水號排序依然會被完美保留）
     return [...selected, ...unselected];
 
   }, [forms, searchTerm, filterPhase, filterMonth, showUrgentOnly, filterVendor, filterStartDate, filterEndDate, selectedIds]); 
@@ -300,9 +297,13 @@ export default function App() {
       <GlobalModal modal={modal} onClose={() => setModal({ ...modal, isOpen: false })} onConfirm={modal.onConfirm} unitOptions={unitOptions} applicantOptions={applicantOptions} />
       
       <ManageCompletedModal 
-        isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} forms={forms} 
-        onDeleteMonth={handleDeleteMonth} onExport={() => { setExportMode('completed'); setShowExportFormatSelect(true); }} 
-        onExportMonth={handleExportMonth} statusSteps={STATUS_STEPS} 
+        isOpen={isManageModalOpen} 
+        onClose={() => setIsManageModalOpen(false)} 
+        onDeleteMonth={handleDeleteMonth} 
+        onExportMonth={handleExportMonth} 
+        statusSteps={STATUS_STEPS} 
+        db={db} 
+        appId={appId} 
       />
       
       <DebugClearModal isOpen={isDebugClearOpen} onClose={() => setIsDebugClearOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} />

@@ -1,32 +1,49 @@
-import React, { useMemo } from 'react';
-import { Download, Trash2, X, AlertTriangle, FolderCog, Lock, CheckCircle2, FileSpreadsheet, FileJson } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Download, Trash2, X, AlertTriangle, FolderCog, Lock, CheckCircle2, FileSpreadsheet, FileJson, Loader2 } from 'lucide-react';
+import { collection, query, onSnapshot } from 'firebase/firestore';
+import { generateCSV, downloadCSV, generateBackupJSON, downloadJSON } from '../utils';
 
-const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport, onExportMonth, statusSteps }) => {
+const ManageCompletedModal = ({ isOpen, onClose, onDeleteMonth, onExportMonth, statusSteps, db, appId }) => {
   
+  const [cloudForms, setCloudForms] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // ★ 核心修改：視窗打開時，向雲端要求全部資料
+  useEffect(() => {
+    if (isOpen && db && appId) {
+      setIsLoading(true);
+      const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'school_forms'));
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setCloudForms(data);
+        setIsLoading(false);
+      });
+      
+      return () => unsubscribe();
+    } else {
+      setCloudForms([]);
+    }
+  }, [isOpen, db, appId]);
+
   const { sortedKeys, grouped } = useMemo(() => {
     const groups = {};
 
-    forms.forEach(f => {
+    cloudForms.forEach(f => {
       let dateObj;
-      if (f.createdAt?.toDate) {
-          dateObj = f.createdAt.toDate();
-      } else if (f.createdAt) {
-          dateObj = new Date(f.createdAt);
-      } else if (f.applicationDate) {
-          dateObj = new Date(f.applicationDate);
-      } else {
-          dateObj = new Date();
-      }
+      if (f.createdAt?.toDate) dateObj = f.createdAt.toDate();
+      else if (f.createdAt) dateObj = new Date(f.createdAt);
+      else if (f.applicationDate) dateObj = new Date(f.applicationDate);
+      else dateObj = new Date();
 
-      if (isNaN(dateObj.getTime())) {
-          dateObj = new Date(); 
-      }
+      if (isNaN(dateObj.getTime())) dateObj = new Date(); 
 
       const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}`;
       
       if (!groups[key]) {
         groups[key] = { all: [], archivable: [] };
       }
+
       groups[key].all.push(f);
 
       const phase = statusSteps?.[f.status]?.phase;
@@ -37,13 +54,30 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
 
     const keys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
     return { sortedKeys: keys, grouped: groups };
-  }, [forms, statusSteps]);
+  }, [cloudForms, statusSteps]);
+
+  // ★ 獨立處理「下載所有結案備份」
+  const handleExportAll = () => {
+    const archivableForms = cloudForms.filter(f => {
+        const phase = statusSteps?.[f.status]?.phase;
+        return phase === 3 || phase === 4;
+    });
+
+    if (archivableForms.length === 0) {
+        alert('目前沒有已結案的資料可供備份。');
+        return;
+    }
+    // 下載 JSON
+    downloadJSON(generateBackupJSON(archivableForms), `系統結案封存備份_${new Date().toISOString().slice(0,10)}.json`);
+  };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+        
+        {/* Header */}
         <div className="p-4 md:p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl shrink-0">
           <div>
             <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -58,17 +92,23 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
           </button>
         </div>
 
+        {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
           
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start gap-3">
              <AlertTriangle className="text-blue-600 shrink-0 mt-0.5" size={20} />
              <div className="text-sm text-blue-800">
-                <strong>防呆機制：</strong> 為避免刪到一半的資料，系統會檢查該月份是否還有「處理中」的單據。<br/>
+                <strong>防呆機制：</strong> 系統已主動向雲端要求完整資料。為避免刪到一半，系統會嚴格檢查該月份是否還有「處理中」的單據。<br/>
                 <span className="text-blue-600 mt-1 block">※ 建議在刪除前，先點擊下方按鈕下載備份。</span>
              </div>
           </div>
 
-          {sortedKeys.length === 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+              <Loader2 size={40} className="animate-spin mb-4 text-indigo-400" />
+              <p className="font-bold text-slate-500">正在從雲端載入所有歷史資料...</p>
+            </div>
+          ) : sortedKeys.length === 0 ? (
             <div className="text-center py-12 text-slate-400">目前沒有任何資料</div>
           ) : (
             sortedKeys.map(monthKey => {
@@ -136,12 +176,14 @@ const ManageCompletedModal = ({ isOpen, onClose, forms, onDeleteMonth, onExport,
           )}
         </div>
 
+        {/* Footer */}
         <div className="p-4 border-t bg-slate-50 rounded-b-xl flex flex-col-reverse sm:flex-row justify-between items-center gap-3 sm:gap-0 shrink-0">
             <button 
-              onClick={onExport}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm order-2 sm:order-1"
+              onClick={handleExportAll}
+              disabled={isLoading}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 transition-all shadow-sm order-2 sm:order-1"
             >
-               <Download size={18} /> 下載備份 (含結案與作廢)
+               <Download size={18} /> 下載所有結案與作廢 (JSON)
             </button>
 
             <button 

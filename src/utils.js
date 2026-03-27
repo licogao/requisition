@@ -106,11 +106,18 @@ export const generateCSV = (dataToExport) => {
         return `"${String(val).replace(/"/g, '""')}"`;
     };
 
-    dataToExport.forEach(f => {
+    const sortedData = [...dataToExport].sort((a, b) => {
+        const idA = a.serialId || '';
+        const idB = b.serialId || '';
+        return idB.localeCompare(idA);
+    });
+
+    sortedData.forEach(f => {
       const dateStr = f.createdAt?.toDate ? toMinguoDate(f.createdAt.toDate()) : '-';
       const appDateStr = isoToMinguo(f.applicationDate);
       const statusStr = STATUS_STEPS[f.status]?.label || f.status;
       const statusTimeStr = f.updatedAt?.toDate ? formatDate(f.updatedAt.toDate().toISOString()) : '-';
+      
       const isVoided = f.status === 'VOIDED';
       const finalTotalPrice = isVoided ? 0 : f.totalPrice;
 
@@ -149,7 +156,12 @@ export const downloadCSV = (content, filename) => {
 };
 
 export const generateBackupJSON = (dataToExport) => {
-    return JSON.stringify(dataToExport, null, 2);
+    const sortedData = [...dataToExport].sort((a, b) => {
+        const idA = a.serialId || '';
+        const idB = b.serialId || '';
+        return idB.localeCompare(idA);
+    });
+    return JSON.stringify(sortedData, null, 2);
 };
 
 export const downloadJSON = (content, filename) => {
