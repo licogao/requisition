@@ -72,7 +72,7 @@ export default function App() {
     isCustomVendor, setIsCustomVendor, isCustomUnit, setIsCustomUnit, 
     isCustomApplicant, setIsCustomApplicant, isSubmitting, totalAmount, availableApplicants,
     handleAddItem, handleRemoveItem, handleItemChange,
-    handleOpenCreate, handleEditClick, handleFormSubmit, formSetters
+    handleOpenCreate, handleEditClick, handleFormSubmit: originalHandleFormSubmit, formSetters
   } = useFormState({ 
     db, appId, user, forms, setModal,
     unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions 
@@ -91,7 +91,11 @@ export default function App() {
     handleImportFile, handleManageCompleted, handleDebugClear, openAlert
   } = useDataTransfer({ db, appId, user, forms, setForms, setModal });
 
-  // 鎖定背景捲軸 Effect
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    originalHandleFormSubmit(e);
+  };
+
   useEffect(() => {
     if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen || isDebugClearOpen || isLogViewerOpen || showExportFormatSelect || isCsvViewerOpen) {
       document.body.style.overflow = 'hidden';
@@ -220,7 +224,6 @@ export default function App() {
 
   }, [forms, searchTerm, filterPhase, filterMonth, showUrgentOnly, filterVendor, filterStartDate, filterEndDate, selectedIds]); 
 
-  // 單一項目操作邏輯
   const handleActionClick = (type, form) => {
     if (type === 'edit') handleEditClick(form);
     else if (type === 'delete') {
@@ -287,13 +290,11 @@ export default function App() {
     }
   };
 
-  // --- 渲染畫面 ---
   if (authLoading) return (<div className="min-h-screen flex items-center justify-center bg-slate-100"><Clock className="text-blue-600 animate-spin" size={40} /></div>);
   if (!user) return (<LoginPage onLogin={handleLogin} loading={authLoading} error={authError} isPreview={false} onAnonymousLogin={handleAnonymousLogin} />);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 font-sans pb-20 md:pb-0">
-      {/* 所有的彈出式 Modal 與組件 */}
       <GlobalModal modal={modal} onClose={() => setModal({ ...modal, isOpen: false })} onConfirm={modal.onConfirm} unitOptions={unitOptions} applicantOptions={applicantOptions} />
       
       <ManageCompletedModal 
@@ -318,7 +319,6 @@ export default function App() {
       
       <CsvViewerModal isOpen={isCsvViewerOpen} onClose={() => setIsCsvViewerOpen(false)} />
 
-      {/* 匯出格式選擇彈窗 */}
       {showExportFormatSelect && (
         <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200">
@@ -344,7 +344,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 新增/修改申請單的彈窗 */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 border border-blue-200">
@@ -433,7 +432,7 @@ export default function App() {
                       <div className="flex gap-2 w-full md:w-auto">
                         <div className="w-28 shrink-0">
                           <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">數量</label>
-                          <input type="number" placeholder="數量 *" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required />
+                          <input type="number" step="any" placeholder="數量 *" value={item.quantity} onChange={e => handleItemChange(index, 'quantity', e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required />
                         </div>
                         <div className="w-20 shrink-0">
                           <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單位</label>
@@ -443,13 +442,13 @@ export default function App() {
                           <label className="block md:hidden text-xs font-bold text-slate-500 mb-1">單價</label>
                           <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
-                            <input type="number" placeholder="單價 *" value={item.unitPrice} onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} className="w-full pl-6 pr-3 py-3 border border-slate-300 rounded-lg text-right text-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required />
+                            <input type="number" step="any" placeholder="單價 *" value={item.unitPrice} onChange={e => handleItemChange(index, 'unitPrice', e.target.value)} className="w-full pl-6 pr-3 py-3 border border-slate-300 rounded-lg text-right text-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" required />
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center justify-between md:justify-end gap-4 mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 w-full md:w-auto">
                         <div className="md:hidden text-sm text-slate-500 font-medium">小計</div>
-                        <div className="text-lg font-bold text-blue-600 w-24 text-right">${((parseInt(item.quantity)||0)*(parseInt(item.unitPrice)||0)).toLocaleString()}</div>
+                        <div className="text-lg font-bold text-blue-600 w-24 text-right">${((parseFloat(item.quantity)||0)*(parseFloat(item.unitPrice)||0)).toLocaleString()}</div>
                         <button type="button" onClick={() => handleRemoveItem(index)} className={`p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all ${newItems.length===1?'invisible':''}`} title="移除此項目"><X size={20} /></button>
                       </div>
                     </div>

@@ -1,174 +1,201 @@
-import React from 'react';
-import { 
-  ChevronDown, ChevronUp, Clock, User, Building, PlayCircle, CheckCircle, AlertCircle, ArrowRight, XCircle, RotateCcw, Edit2, Copy, Ban 
-} from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Download, Trash2, X, AlertTriangle, FolderCog, Lock, CheckCircle2, FileSpreadsheet, FileJson, Loader2 } from 'lucide-react';
+import { collection, query, onSnapshot } from 'firebase/firestore';
+import { generateCSV, downloadCSV, generateBackupJSON, downloadJSON } from '../utils';
 
-const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps, selected, onSelect, canRevert }) => {
-  const isExpanded = expandedId === form.id;
-  const statusConfig = statusSteps?.[form.status] || {};
+const ManageCompletedModal = ({ isOpen, onClose, onDeleteMonth, onExportMonth, statusSteps, db, appId }) => {
   
-  const getStatusColor = (phase) => {
-    if (phase === 1) return 'bg-blue-100 text-blue-700 border-blue-200';
-    if (phase === 2) return 'bg-orange-100 text-orange-700 border-orange-200';
-    if (phase === 3) return 'bg-slate-900 text-white border-slate-700';
-    if (phase === 4) return 'bg-slate-200 text-slate-500 border-slate-300';
-    return 'bg-slate-100 text-slate-700 border-slate-200';
-  };
+  const [cloudForms, setCloudForms] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const getStatusIcon = (phase) => {
-    if (phase === 1) return <PlayCircle size={16} />;
-    if (phase === 2) return <Clock size={16} />;
-    if (phase === 3) return <CheckCircle size={16} />;
-    if (phase === 4) return <Ban size={16} />;
-    return <AlertCircle size={16} />;
-  };
-
-  const formatLocalTime = (isoString) => {
-    if (!isoString) return '-';
-    try {
-      return new Date(isoString).toLocaleString('zh-TW', {
-        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+  // 視窗打開時，向雲端要求全部資料
+  useEffect(() => {
+    if (isOpen && db && appId) {
+      setIsLoading(true);
+      const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'school_forms'));
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setCloudForms(data);
+        setIsLoading(false);
       });
-    } catch (e) { return '-'; }
+      
+      return () => unsubscribe();
+    } else {
+      setCloudForms([]);
+    }
+  }, [isOpen, db, appId]);
+
+  const { sortedKeys, grouped } = useMemo(() => {
+    const groups = {};
+
+    cloudForms.forEach(f => {
+      let dateObj;
+      if (f.createdAt?.toDate) dateObj = f.createdAt.toDate();
+      else if (f.createdAt) dateObj = new Date(f.createdAt);
+      else if (f.applicationDate) dateObj = new Date(f.applicationDate);
+      else dateObj = new Date();
+
+      if (isNaN(dateObj.getTime())) dateObj = new Date(); 
+
+      const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}`;
+      
+      if (!groups[key]) {
+        groups[key] = { all: [], archivable: [] };
+      }
+
+      groups[key].all.push(f);
+
+      const phase = statusSteps?.[f.status]?.phase;
+      if (phase === 3 || phase === 4) {
+        groups[key].archivable.push(f);
+      }
+    });
+
+    const keys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+    return { sortedKeys: keys, grouped: groups };
+  }, [cloudForms, statusSteps]);
+
+  // 處理「下載所有結案備份」
+  const handleExportAll = () => {
+    const archivableForms = cloudForms.filter(f => {
+        const phase = statusSteps?.[f.status]?.phase;
+        return phase === 3 || phase === 4;
+    });
+
+    if (archivableForms.length === 0) {
+        alert('目前沒有已結案的資料可供備份。');
+        return;
+    }
+    // 下載 JSON
+    downloadJSON(generateBackupJSON(archivableForms), `系統結案封存備份_${new Date().toISOString().slice(0,10)}.json`);
   };
+
+  if (!isOpen) return null;
 
   return (
-    <div className={`bg-white rounded-xl border shadow-sm transition-all duration-200 ${isExpanded ? 'border-blue-400 ring-1 ring-blue-100' : 'border-slate-200'} ${selected ? 'bg-blue-50/30 ring-1 ring-blue-300 border-blue-300' : ''} ${form.isUrgent ? 'bg-red-50' : ''} ${statusConfig.phase === 4 ? 'opacity-70 grayscale-[30%]' : ''}`}>
-      <div className="p-4">
-        <div className="flex gap-3">
-          <div className="pt-1">
-             <input 
-                type="checkbox" 
-                checked={selected} 
-                onChange={(e) => onSelect(form.id, e.target.checked)}
-                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-             />
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh]">
+        
+        {/* Header */}
+        <div className="p-4 md:p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl shrink-0">
+          <div>
+            <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
+              <FolderCog className="text-indigo-600" /> 管理結案與作廢資料
+            </h3>
+            <p className="text-xs md:text-sm text-slate-500 mt-1">
+              當月份的「所有單據」皆結案或作廢後，方可解鎖刪除封存功能。
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+            <X size={24} className="text-slate-500" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+          
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start gap-3">
+             <AlertTriangle className="text-blue-600 shrink-0 mt-0.5" size={20} />
+             <div className="text-sm text-blue-800">
+                <strong>防呆機制：</strong> 系統已主動向雲端要求完整資料。為避免刪到一半，系統會嚴格檢查該月份是否還有「處理中」的單據。<br/>
+                <span className="text-blue-600 mt-1 block">※ 建議在刪除前，先點擊下方按鈕下載備份。</span>
+             </div>
           </div>
 
-          <div className="flex-1 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : form.id)}>
-            <div className="flex justify-between items-start gap-3">
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                    {form.serialId}
-                  </span>
-                  {form.isUrgent && (
-                    <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold border border-red-200 animate-pulse">
-                      速件
-                    </span>
-                  )}
-                  <span className={`text-xs px-2 py-0.5 rounded border font-bold flex items-center gap-1 ${getStatusColor(statusConfig.phase)}`}>
-                    {getStatusIcon(statusConfig.phase)}
-                    {statusConfig.label}
-                  </span>
-                </div>
-                
-                <h3 className={`font-bold text-slate-800 text-base leading-tight ${statusConfig.phase === 4 ? 'line-through' : ''}`}>
-                  {form.subject || '無採購項目'}
-                </h3>
-                
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <Building size={14} />
-                  <span>{form.unit}</span>
-                  <span className="text-slate-300">|</span>
-                  <User size={14} />
-                  <span>{form.applicant}</span>
-                </div>
-              </div>
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+              <Loader2 size={40} className="animate-spin mb-4 text-indigo-400" />
+              <p className="font-bold text-slate-500">正在從雲端載入所有歷史資料...</p>
+            </div>
+          ) : sortedKeys.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">目前沒有任何資料</div>
+          ) : (
+            sortedKeys.map(monthKey => {
+              const totalCount = grouped[monthKey].all.length;
+              const archivableCount = grouped[monthKey].archivable.length;
+              const isUnlocked = totalCount > 0 && totalCount === archivableCount;
 
-              <div className="flex flex-col items-end gap-3">
-                <div className="text-right">
-                  <div className="text-xs text-slate-400">總金額</div>
-                  <div className={`font-bold text-lg ${statusConfig.phase === 4 ? 'text-slate-400 line-through' : 'text-blue-600'}`}>
-                    ${(form.totalPrice || 0).toLocaleString()}
+              return (
+                <div key={monthKey} className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white border rounded-xl transition-all shadow-sm gap-3 sm:gap-0 ${isUnlocked ? 'border-indigo-200 hover:border-indigo-300' : 'border-slate-200 opacity-80'}`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-lg font-mono font-bold ${isUnlocked ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {monthKey}
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-800 text-base">
+                        {archivableCount} / {totalCount} <span className="text-sm font-medium text-slate-500">筆已準備好</span>
+                      </div>
+                      <div className={`text-xs font-bold mt-1 flex items-center gap-1 ${isUnlocked ? 'text-emerald-600' : 'text-orange-500'}`}>
+                        {isUnlocked ? (
+                          <><CheckCircle2 size={14} /> 全數可歸檔</>
+                        ) : (
+                          <><AlertTriangle size={14} /> 尚有 {totalCount - archivableCount} 筆未完成</>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                    <button 
+                      onClick={() => onExportMonth(monthKey, grouped[monthKey].all, 'csv')}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors text-sm font-bold flex-1 sm:flex-none border border-emerald-100"
+                      title="下載此月份 CSV 報表"
+                    >
+                      <FileSpreadsheet size={16} /> CSV
+                    </button>
+                    <button 
+                      onClick={() => onExportMonth(monthKey, grouped[monthKey].all, 'json')}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors text-sm font-bold flex-1 sm:flex-none border border-blue-100"
+                      title="下載此月份 JSON 備份"
+                    >
+                      <FileJson size={16} /> JSON
+                    </button>
+                    
+                    {isUnlocked ? (
+                      <button 
+                        onClick={() => onDeleteMonth(monthKey, grouped[monthKey].archivable)}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 bg-white text-red-600 hover:bg-red-50 rounded-lg border border-red-200 hover:border-red-300 transition-all text-sm font-bold flex-[2] sm:flex-none shadow-sm"
+                        title="刪除此月份所有資料"
+                      >
+                        <Trash2 size={16} /> 刪除封存
+                      </button>
+                    ) : (
+                      <button 
+                        disabled
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 text-slate-400 bg-slate-50 rounded-lg border border-slate-200 cursor-not-allowed text-sm font-bold flex-[2] sm:flex-none"
+                        title="需等該月所有單據結案或作廢後才能刪除"
+                      >
+                        <Lock size={16} /> 鎖定中
+                      </button>
+                    )}
                   </div>
                 </div>
-                {isExpanded ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
-              </div>
-            </div>
-          </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t bg-slate-50 rounded-b-xl flex flex-col-reverse sm:flex-row justify-between items-center gap-3 sm:gap-0 shrink-0">
+            <button 
+              onClick={handleExportAll}
+              disabled={isLoading}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-lg hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-50 transition-all shadow-sm order-2 sm:order-1"
+            >
+               <Download size={18} /> 下載所有結案與作廢 (JSON)
+            </button>
+
+            <button 
+              onClick={onClose} 
+              className="w-full sm:w-auto px-8 py-2.5 bg-slate-800 text-white font-bold rounded-lg hover:bg-slate-900 transition-colors shadow-md order-1 sm:order-2"
+            >
+              關閉
+            </button>
         </div>
       </div>
-
-      {isExpanded && (
-        <div className="px-4 pb-4 pt-0 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200 relative">
-          <div className="flex justify-end gap-2 pt-3 pb-1">
-              {statusConfig.phase !== 4 && (
-                  <>
-                     <button 
-                        onClick={() => onAction('void_and_replace', form)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-600 border border-slate-200 rounded-full hover:bg-slate-50 transition-all text-sm font-bold shadow-sm"
-                     >
-                        <Copy size={14} /> 換單作廢
-                     </button>
-                     <button 
-                        onClick={() => onAction('edit', form)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-blue-600 border border-blue-200 rounded-full hover:bg-blue-50 transition-all text-sm font-bold shadow-sm"
-                     >
-                        <Edit2 size={14} /> 修改
-                     </button>
-                  </>
-              )}
-              {statusConfig.phase === 4 && (
-                   <button 
-                      onClick={() => onAction('undo_void', form)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-600 border border-emerald-200 rounded-full hover:bg-emerald-50 transition-all text-sm font-bold shadow-sm"
-                   >
-                      <RotateCcw size={14} /> 解除作廢
-                   </button>
-              )}
-          </div>
-          
-          <div className="py-2 space-y-3 text-base">
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg">
-              <div>
-                <span className="text-xs text-slate-400 block mb-1">申請日期</span>
-                <span className="font-medium text-slate-800">{form.applicationDate ? form.applicationDate.replace(/-/g, '/') : '-'}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-400 block mb-1">廠商</span>
-                <span className="font-medium text-slate-800">{form.vendor || '-'}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-400 block mb-1">計畫來源</span>
-                <span className="font-medium text-slate-800">{form.subsidy || '無'}</span>
-              </div>
-              <div>
-                <span className="text-xs text-slate-400 block mb-1">領回人</span>
-                <span className="font-medium text-slate-800">{form.receiverName || '-'}</span>
-              </div>
-            </div>
-
-            {form.globalRemark && (
-              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-yellow-900 text-sm whitespace-pre-wrap">
-                <strong>備註：</strong> {form.globalRemark}
-              </div>
-            )}
-
-            <div className="mt-4">
-              <h4 className="text-sm font-bold text-slate-600 mb-2 uppercase tracking-wider">最近歷程</h4>
-              <div className="space-y-2 relative pl-2 border-l-2 border-slate-200 ml-1">
-                {(form.logs || []).slice().reverse().slice(0, 3).map((log, idx) => (
-                  <div key={idx} className="pl-3 relative">
-                    <div className="absolute -left-[13px] top-1.5 w-2.5 h-2.5 rounded-full bg-white border-2 border-blue-400"></div>
-                    <div className="text-xs text-slate-400">{formatLocalTime(log.timestamp)}</div>
-                    <div className="text-base font-medium text-slate-800 whitespace-pre-wrap">{log.note || log.status}</div>
-                    <div className="text-xs text-slate-500">操作: {log.operator}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2 mt-2 pt-3 border-t border-slate-100 overflow-x-auto pb-1 no-scrollbar">
-            {statusConfig.phase < 3 && (<button onClick={() => onAction('advance', form)} className="flex-[2] min-w-[120px] py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold shadow-sm active:bg-emerald-700 flex items-center justify-center gap-1">{statusConfig.nextAction} <ArrowRight size={16} /></button>)}
-            {canRevert && (<button onClick={() => onAction('revert', form)} className="flex-1 min-w-[80px] py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-bold active:bg-red-50 flex items-center justify-center gap-1"><RotateCcw size={16} /> 退回</button>)}
-            <button onClick={() => onAction('delete', form)} className="flex-none px-3 py-2 bg-white border border-red-200 text-red-500 rounded-lg active:bg-red-50"><XCircle size={20} /></button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default MobileFormCard;
+export default ManageCompletedModal;

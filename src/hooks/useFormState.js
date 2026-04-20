@@ -21,6 +21,7 @@ export const useFormState = ({
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingFormId, setEditingFormId] = useState(null);
   
+  // 自訂輸入狀態
   const [isCustomSubsidy, setIsCustomSubsidy] = useState(false);
   const [isCustomVendor, setIsCustomVendor] = useState(false);
   const [isCustomUnit, setIsCustomUnit] = useState(false);
@@ -31,6 +32,7 @@ export const useFormState = ({
   // 計算總金額
   const totalAmount = newItems.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)), 0);
 
+  // 打包 setters 給其他 Hook (如 useBatchActions) 使用
   const formSetters = useMemo(() => ({
     setNewUnit, setNewApplicant, setNewSubsidy, setNewVendor,
     setIsUrgent, setNewGlobalRemark, setNewItems, setIsEditMode,
@@ -115,7 +117,13 @@ export const useFormState = ({
       
       const formData = {
         unit: newUnit, applicant: newApplicant, isUrgent, globalRemark: newGlobalRemark, vendor: newVendor, applicationDate: newApplicationDate, 
-        items: newItems.map(i => ({ subject: i.subject, quantity: parseInt(i.quantity) || 1, measureUnit: i.measureUnit || '個', unitPrice: parseInt(i.unitPrice) || 0, subtotal: (parseInt(i.quantity) || 0) * (parseInt(i.unitPrice) || 0) })),
+        items: newItems.map(i => ({ 
+            subject: i.subject, 
+            quantity: parseFloat(i.quantity) || 1, 
+            measureUnit: i.measureUnit || '個', 
+            unitPrice: parseFloat(i.unitPrice) || 0, 
+            subtotal: (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0) 
+        })),
         subject: mainSubject, totalPrice: totalAmount, subsidy: newSubsidy, updatedAt: serverTimestamp()
       };
 
@@ -126,6 +134,7 @@ export const useFormState = ({
       } else {
          const newSerialId = generateSerialId();
          formData.serialId = newSerialId; 
+         // ★ 修改：直接將初始狀態設定為 P1_ACCOUNTING (會計室審核中)
          formData.status = 'P1_ACCOUNTING'; 
          formData.logs = [{ status: 'P1_ACCOUNTING', timestamp, note: '案件成立並送交會計室審核', operator: getOperatorName(user) }];
          formData.time_P1_ACCOUNTING = timestamp; 
