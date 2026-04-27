@@ -8,7 +8,7 @@ const ManageCompletedModal = ({ isOpen, onClose, onDeleteMonth, onExportMonth, s
   const [cloudForms, setCloudForms] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ★ 核心修改：視窗打開時，向雲端要求全部資料
+  // 視窗打開時，獨立向雲端要求全部資料
   useEffect(() => {
     if (isOpen && db && appId) {
       setIsLoading(true);
@@ -47,6 +47,7 @@ const ManageCompletedModal = ({ isOpen, onClose, onDeleteMonth, onExportMonth, s
       groups[key].all.push(f);
 
       const phase = statusSteps?.[f.status]?.phase;
+      // 判定為結案或作廢即可歸檔
       if (phase === 3 || phase === 4) {
         groups[key].archivable.push(f);
       }
@@ -56,7 +57,7 @@ const ManageCompletedModal = ({ isOpen, onClose, onDeleteMonth, onExportMonth, s
     return { sortedKeys: keys, grouped: groups };
   }, [cloudForms, statusSteps]);
 
-  // ★ 獨立處理「下載所有結案備份」
+  // 處理「下載所有結案備份」
   const handleExportAll = () => {
     const archivableForms = cloudForms.filter(f => {
         const phase = statusSteps?.[f.status]?.phase;
@@ -67,7 +68,6 @@ const ManageCompletedModal = ({ isOpen, onClose, onDeleteMonth, onExportMonth, s
         alert('目前沒有已結案的資料可供備份。');
         return;
     }
-    // 下載 JSON
     downloadJSON(generateBackupJSON(archivableForms), `系統結案封存備份_${new Date().toISOString().slice(0,10)}.json`);
   };
 
@@ -97,9 +97,9 @@ const ManageCompletedModal = ({ isOpen, onClose, onDeleteMonth, onExportMonth, s
           
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start gap-3">
              <AlertTriangle className="text-blue-600 shrink-0 mt-0.5" size={20} />
-             <div className="text-sm text-blue-800">
+             <div className="text-sm text-blue-800 leading-relaxed">
                 <strong>防呆機制：</strong> 系統已主動向雲端要求完整資料。為避免刪到一半，系統會嚴格檢查該月份是否還有「處理中」的單據。<br/>
-                <span className="text-blue-600 mt-1 block">※ 建議在刪除前，先點擊下方按鈕下載備份。</span>
+                <span className="text-blue-600 font-bold mt-1 block">※ 建議在刪除前，先點擊下方按鈕下載備份。</span>
              </div>
           </div>
 
