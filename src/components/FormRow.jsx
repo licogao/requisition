@@ -82,6 +82,11 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
               {getStatusIcon(statusConfig.phase)} {statusConfig.label}
             </span>
             <div className="text-xs text-slate-400 font-mono pl-1">{formatMinguoTime(form.updatedAt)}</div>
+            {form.receiverName && (
+               <div className="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100 mt-0.5">
+                 領: {form.receiverName}
+               </div>
+            )}
           </div>
         </td>
         <td className="p-4 align-top">
@@ -129,7 +134,6 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
                     申請單詳情 <span className="text-base font-normal text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded font-mono ml-2">{form.serialId}</span>
                   </h4>
                   
-                  {/* 恢復顯示申請單詳情資訊 */}
                   <div className="space-y-4 mb-6">
                     <div className="flex items-center gap-3">
                         <span className="w-24 text-sm font-bold text-slate-500 text-right uppercase tracking-wider">申請日期</span>
