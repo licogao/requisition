@@ -210,8 +210,20 @@ const FormRow = ({ form, expandedId, setExpandedId, onAction, selected, onSelect
                       <div key={idx} className="relative pl-6">
                         <div className={`absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full border-2 ring-4 ${idx === 0 ? 'bg-blue-500 border-blue-500' : 'bg-white border-slate-300'}`}></div>
                         <div className="flex flex-col gap-1.5">
-                            <span className="text-lg font-bold font-mono text-slate-900">{formatMinguoTime(log.timestamp)}</span>
-                            <div className={`text-base whitespace-pre-wrap ${getLogTextColor(log.note || log.status)}`}>{log.note || log.status}</div>
+                            {/* 顯示操作時間 */}
+                            <span className={`text-base font-bold font-mono ${idx === 0 ? 'text-blue-700' : 'text-slate-600'}`}>
+                                {formatMinguoTime(log.timestamp)}
+                            </span>
+                            <div className={`text-base whitespace-pre-wrap ${getLogTextColor(log.note || log.status)}`}>
+                                {log.note || log.status}
+                            </div>
+                            {/* 顯示操作者 */}
+                            {log.operator && (
+                                <div className="text-sm text-slate-500 flex items-center gap-1.5 mt-1">
+                                    <User size={14} className="text-slate-400" />
+                                    <span>{log.operator}</span>
+                                </div>
+                            )}
                         </div>
                       </div>
                     ))}
