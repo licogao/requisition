@@ -5,9 +5,8 @@ import { getOperatorName } from '../utils';
 
 export const useFormState = ({
   db, appId, user, forms, setModal,
-  unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions
+  unitOptions, projectOptions, vendorOptions, applicantOptions, remarkOptions, checkAndSaveNewOptions
 }) => {
-  // --- 表單狀態 ---
   const [newUnit, setNewUnit] = useState('');
   const [newApplicant, setNewApplicant] = useState('');
   const [newSubsidy, setNewSubsidy] = useState('');
@@ -21,34 +20,28 @@ export const useFormState = ({
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingFormId, setEditingFormId] = useState(null);
   
-  // 自訂輸入狀態
   const [isCustomSubsidy, setIsCustomSubsidy] = useState(false);
   const [isCustomVendor, setIsCustomVendor] = useState(false);
   const [isCustomUnit, setIsCustomUnit] = useState(false);
   const [isCustomApplicant, setIsCustomApplicant] = useState(false);
+  const [isCustomRemark, setIsCustomRemark] = useState(false); // ★ 新增備註自訂狀態
   
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 計算總金額
   const totalAmount = newItems.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)), 0);
 
-  // 打包 setters 給其他 Hook (如 useBatchActions) 使用
   const formSetters = useMemo(() => ({
     setNewUnit, setNewApplicant, setNewSubsidy, setNewVendor,
     setIsUrgent, setNewGlobalRemark, setNewItems, setIsEditMode,
-    setEditingFormId, setIsFormOpen
+    setEditingFormId, setIsFormOpen, setIsCustomRemark
   }), []);
 
-  // 計算可用的申請人名單
   const availableApplicants = useMemo(() => {
     if (!applicantOptions) return [];
-    if (newUnit && applicantOptions[newUnit]) {
-        return applicantOptions[newUnit];
-    }
+    if (newUnit && applicantOptions[newUnit]) return applicantOptions[newUnit];
     return [];
   }, [newUnit, applicantOptions]);
 
-  // 動態產生流水號
   const generateSerialId = () => {
     const today = new Date();
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
@@ -70,7 +63,6 @@ export const useFormState = ({
     if (isFormOpen && !isEditMode) setPreviewSerialId(generateSerialId());
   }, [isFormOpen, forms, isEditMode]);
 
-  // --- 表單操作事件 ---
   const handleAddItem = () => setNewItems([...newItems, { id: Date.now(), subject: '', quantity: 1, measureUnit: '個', unitPrice: '' }]);
   const handleRemoveItem = (index) => { if (newItems.length > 1) { const updated = [...newItems]; updated.splice(index, 1); setNewItems(updated); } };
   const handleItemChange = (index, field, value) => { const updated = [...newItems]; updated[index][field] = value; setNewItems(updated); };
@@ -79,7 +71,7 @@ export const useFormState = ({
     setNewUnit(''); setNewApplicant(''); setNewSubsidy(''); setIsCustomSubsidy(false); setNewVendor(''); setIsCustomVendor(false); setNewGlobalRemark(''); setIsUrgent(false); setNewApplicationDate(''); 
     setNewItems([{ id: Date.now(), subject: '', quantity: 1, measureUnit: '個', unitPrice: '' }]);
     setIsEditMode(false); setEditingFormId(null); setPreviewSerialId('');
-    setIsCustomUnit(false); setIsCustomApplicant(false); setIsCustomSubsidy(false); setIsCustomVendor(false);
+    setIsCustomUnit(false); setIsCustomApplicant(false); setIsCustomSubsidy(false); setIsCustomVendor(false); setIsCustomRemark(false); // ★ 重置備註
   };
 
   const handleOpenCreate = () => { resetForm(); setIsEditMode(false); setIsFormOpen(true); };
@@ -93,8 +85,10 @@ export const useFormState = ({
     if (form.subsidy && !projectOptions.includes(form.subsidy) && form.subsidy !== '無計畫 (公務)') setIsCustomSubsidy(true); else setIsCustomSubsidy(false);
     if (form.vendor && !vendorOptions.includes(form.vendor)) setIsCustomVendor(true); else setIsCustomVendor(false);
     if (form.unit && !unitOptions.includes(form.unit)) setIsCustomUnit(true); else setIsCustomUnit(false);
+    
     const applicantsInUnit = applicantOptions[form.unit] || [];
     if (form.applicant && !applicantsInUnit.includes(form.applicant)) setIsCustomApplicant(true); else setIsCustomApplicant(false);
+    if (form.globalRemark && !remarkOptions?.includes(form.globalRemark)) setIsCustomRemark(true); else setIsCustomRemark(false);
 
     setIsFormOpen(true);
   };
@@ -110,20 +104,14 @@ export const useFormState = ({
 
     setIsSubmitting(true);
     try {
-      checkAndSaveNewOptions({ newUnit, newApplicant, newSubsidy, newVendor });
+      checkAndSaveNewOptions({ newUnit, newApplicant, newSubsidy, newVendor, newGlobalRemark });
 
       const timestamp = new Date().toISOString();
       const mainSubject = newItems.map(i => i.subject).join('、');
       
       const formData = {
         unit: newUnit, applicant: newApplicant, isUrgent, globalRemark: newGlobalRemark, vendor: newVendor, applicationDate: newApplicationDate, 
-        items: newItems.map(i => ({ 
-            subject: i.subject, 
-            quantity: parseFloat(i.quantity) || 1, 
-            measureUnit: i.measureUnit || '個', 
-            unitPrice: parseFloat(i.unitPrice) || 0, 
-            subtotal: (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0) 
-        })),
+        items: newItems.map(i => ({ subject: i.subject, quantity: parseFloat(i.quantity) || 1, measureUnit: i.measureUnit || '個', unitPrice: parseFloat(i.unitPrice) || 0, subtotal: (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0) })),
         subject: mainSubject, totalPrice: totalAmount, subsidy: newSubsidy, updatedAt: serverTimestamp()
       };
 
@@ -133,13 +121,9 @@ export const useFormState = ({
          logType = LOG_TYPES.UPDATE; logDetail = `修改申請單：${previewSerialId} (金額: ${totalAmount})`;
       } else {
          const newSerialId = generateSerialId();
-         formData.serialId = newSerialId; 
-         // ★ 修改：直接將初始狀態設定為 P1_ACCOUNTING (會計室審核中)
-         formData.status = 'P1_ACCOUNTING'; 
+         formData.serialId = newSerialId; formData.status = 'P1_ACCOUNTING'; 
          formData.logs = [{ status: 'P1_ACCOUNTING', timestamp, note: '案件成立並送交會計室審核', operator: getOperatorName(user) }];
-         formData.time_P1_ACCOUNTING = timestamp; 
-         formData.createdAt = serverTimestamp();
-         
+         formData.time_P1_ACCOUNTING = timestamp; formData.createdAt = serverTimestamp();
          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'school_forms'), formData);
          logType = LOG_TYPES.CREATE; logDetail = `新增申請單：${newSerialId} (金額: ${totalAmount})`;
       }
@@ -166,6 +150,7 @@ export const useFormState = ({
     isEditMode, setIsEditMode, editingFormId, setEditingFormId,
     isCustomSubsidy, setIsCustomSubsidy, isCustomVendor, setIsCustomVendor,
     isCustomUnit, setIsCustomUnit, isCustomApplicant, setIsCustomApplicant,
+    isCustomRemark, setIsCustomRemark,
     isSubmitting, setIsSubmitting, totalAmount, availableApplicants,
     handleAddItem, handleRemoveItem, handleItemChange,
     resetForm, handleOpenCreate, handleEditClick, handleFormSubmit,

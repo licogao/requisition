@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db, appId } from '../firebase';
-import { DEFAULT_UNITS, DEFAULT_PROJECTS, DEFAULT_VENDORS, DEFAULT_APPLICANTS } from '../constants';
+import { DEFAULT_UNITS, DEFAULT_PROJECTS, DEFAULT_VENDORS } from '../constants';
 
 export const useSettings = (user) => {
   const [unitOptions, setUnitOptions] = useState(DEFAULT_UNITS);
   const [projectOptions, setProjectOptions] = useState(DEFAULT_PROJECTS);
   const [vendorOptions, setVendorOptions] = useState(DEFAULT_VENDORS);
   const [applicantOptions, setApplicantOptions] = useState({}); 
+  const [remarkOptions, setRemarkOptions] = useState([]); // ★ 新增備註狀態
 
   useEffect(() => {
     if (!user) return;
@@ -19,6 +20,7 @@ export const useSettings = (user) => {
         if (data.units) setUnitOptions(data.units);
         if (data.projects) setProjectOptions(data.projects);
         if (data.vendors) setVendorOptions(data.vendors);
+        if (data.remarks) setRemarkOptions(data.remarks); // ★ 讀取備註清單
         
         if (data.applicants) {
             if (Array.isArray(data.applicants)) {
@@ -34,14 +36,16 @@ export const useSettings = (user) => {
           units: DEFAULT_UNITS, 
           projects: DEFAULT_PROJECTS, 
           vendors: DEFAULT_VENDORS,
-          applicants: {} 
+          applicants: {},
+          remarks: []
         }).catch(err => {});
       }
     });
 
     return () => unsubscribe();
   }, [user]);
-  const checkAndSaveNewOptions = async ({ newUnit, newApplicant, newSubsidy, newVendor }) => {
+
+  const checkAndSaveNewOptions = async ({ newUnit, newApplicant, newSubsidy, newVendor, newGlobalRemark }) => {
     const updateData = {};
     
     const trimmedUnit = newUnit?.trim();
@@ -50,7 +54,7 @@ export const useSettings = (user) => {
     }
 
     const trimmedApplicant = newApplicant?.trim();
-    if (trimmedUnit && trimmedApplicant) {
+    if (trimmedUnit && trimmedApplicant) { 
         const currentUnitApplicants = applicantOptions[trimmedUnit] || [];
         if (!currentUnitApplicants.includes(trimmedApplicant) && window.confirm(`是否將「${trimmedApplicant}」加入 ${trimmedUnit} 的常用名單？`)) {
             updateData.applicants = {
@@ -70,6 +74,11 @@ export const useSettings = (user) => {
         updateData.vendors = [...vendorOptions, trimmedVendor];
     }
 
+    const trimmedRemark = newGlobalRemark?.trim();
+    if (trimmedRemark && !remarkOptions.includes(trimmedRemark) && window.confirm(`是否將這段備註加入「常用案件備註」？`)) {
+        updateData.remarks = [...remarkOptions, trimmedRemark];
+    }
+
     if (Object.keys(updateData).length > 0) {
         try {
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_settings', 'config1'), updateData, { merge: true });
@@ -79,5 +88,5 @@ export const useSettings = (user) => {
     }
   };
 
-  return { unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions }; // 回傳新函式
+  return { unitOptions, projectOptions, vendorOptions, applicantOptions, remarkOptions, checkAndSaveNewOptions }; 
 };

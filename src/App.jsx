@@ -36,7 +36,7 @@ export default function App() {
     login: handleLogin, loginAnonymous: handleAnonymousLogin, logout: handleLogout            
   } = useAuth();
 
-  const { unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions } = useSettings(user);
+  const { unitOptions, projectOptions, vendorOptions, applicantOptions, remarkOptions, checkAndSaveNewOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -70,12 +70,13 @@ export default function App() {
     isUrgent, setIsUrgent, previewSerialId, 
     newItems, isFormOpen, setIsFormOpen, isEditMode, isCustomSubsidy, setIsCustomSubsidy, 
     isCustomVendor, setIsCustomVendor, isCustomUnit, setIsCustomUnit, 
-    isCustomApplicant, setIsCustomApplicant, isSubmitting, totalAmount, availableApplicants,
+    isCustomApplicant, setIsCustomApplicant, isCustomRemark, setIsCustomRemark,
+    isSubmitting, totalAmount, availableApplicants,
     handleAddItem, handleRemoveItem, handleItemChange,
-    handleOpenCreate, handleEditClick, handleFormSubmit: originalHandleFormSubmit, formSetters
+    handleOpenCreate, handleEditClick, handleFormSubmit, formSetters
   } = useFormState({ 
     db, appId, user, forms, setModal,
-    unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions 
+    unitOptions, projectOptions, vendorOptions, applicantOptions, remarkOptions, checkAndSaveNewOptions 
   });
 
   const batchActions = useBatchActions({ db, appId, user, forms, selectedIds, setSelectedIds, setModal, formSetters });
@@ -90,11 +91,6 @@ export default function App() {
     handleConfirmExport, executeExport, handleExportMonth,
     handleImportFile, handleManageCompleted, handleDebugClear, openAlert
   } = useDataTransfer({ db, appId, user, forms, setForms, setModal });
-
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    originalHandleFormSubmit(e);
-  };
 
   useEffect(() => {
     if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen || isDebugClearOpen || isLogViewerOpen || showExportFormatSelect || isCsvViewerOpen) {
@@ -309,7 +305,7 @@ export default function App() {
       
       <DebugClearModal isOpen={isDebugClearOpen} onClose={() => setIsDebugClearOpen(false)} forms={forms} onDeleteMonth={handleDeleteMonth} />
       <LogViewerModal isOpen={isLogViewerOpen} onClose={() => setIsLogViewerOpen(false)} db={db} appId={appId} user={user} />
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialData={{ units: unitOptions, projects: projectOptions, vendors: vendorOptions, applicants: applicantOptions }} onSave={() => {}} db={db} appId={appId} openAlert={openAlert} openConfirm={(t,m,c)=>setModal({isOpen:true,type:'confirm',title:t,message:m,onConfirm:c})} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialData={{ units: unitOptions, projects: projectOptions, vendors: vendorOptions, applicants: applicantOptions, remarks: remarkOptions }} onSave={() => {}} db={db} appId={appId} openAlert={openAlert} openConfirm={(t,m,c)=>setModal({isOpen:true,type:'confirm',title:t,message:m,onConfirm:c})} />
       
       <ExportModal 
         isOpen={isExportModalOpen} onClose={handleCloseExportModal} onConfirm={handleConfirmExport} 
@@ -409,10 +405,21 @@ export default function App() {
                   <MinguoDateInput value={newApplicationDate} onChange={setNewApplicationDate} />
                 </div>
               </div>
+              
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1">案件背景備註 (選填)</label>
-                <textarea placeholder="時程或其他重要備註" value={newGlobalRemark} onChange={e => setNewGlobalRemark(e.target.value)} className="w-full p-3 border rounded-lg text-lg min-h-[60px]" />
+                {isCustomRemark ? (
+                  <div className="flex gap-2 items-start">
+                    <textarea placeholder="時程或其他重要備註" value={newGlobalRemark} onChange={e => setNewGlobalRemark(e.target.value)} className="w-full p-3 border rounded-lg text-lg min-h-[60px]" autoFocus />
+                    <button type="button" onClick={() => { setIsCustomRemark(false); setNewGlobalRemark(''); }} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg h-[60px] w-12 flex items-center justify-center shrink-0 border border-transparent transition-colors">
+                      <X size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <SearchableSelect options={remarkOptions} value={newGlobalRemark} onChange={(val) => setNewGlobalRemark(val)} placeholder="選擇或搜尋常用備註..." onCustomClick={(val) => { setIsCustomRemark(true); setNewGlobalRemark(val || ''); }} />
+                )}
               </div>
+
               <div className="flex items-center">
                 <label className="flex items-center gap-2 cursor-pointer bg-red-50 px-3 py-2 rounded border border-red-100 h-12">
                   <input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} className="w-5 h-5 text-red-600 rounded" />

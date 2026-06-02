@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  ChevronDown, ChevronUp, Clock, User, Building, PlayCircle, CheckCircle, AlertCircle, ArrowRight, XCircle, RotateCcw, Edit2, Copy 
+  ChevronDown, ChevronUp, Clock, User, Building, PlayCircle, CheckCircle, AlertCircle, ArrowRight, XCircle, RotateCcw, Edit2, Copy, Ban, FileText
 } from 'lucide-react';
 
 const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps, selected, onSelect, canRevert }) => {
@@ -19,6 +19,7 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
     if (phase === 1) return <PlayCircle size={16} />;
     if (phase === 2) return <Clock size={16} />;
     if (phase === 3) return <CheckCircle size={16} />;
+    if (phase === 4) return <Ban size={16} />;
     return <AlertCircle size={16} />;
   };
 
@@ -60,7 +61,6 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
                     {getStatusIcon(statusConfig.phase)}
                     {statusConfig.label}
                   </span>
-                  {/* ★ 補回手機版外層的領回人標籤 ★ */}
                   {form.receiverName && (
                      <span className="text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
                        領: {form.receiverName}
@@ -146,8 +146,12 @@ const MobileFormCard = ({ form, expandedId, setExpandedId, onAction, statusSteps
             </div>
 
             {form.globalRemark && (
-              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-yellow-900 text-sm whitespace-pre-wrap">
-                <strong>備註：</strong> {form.globalRemark}
+              <div className="mt-3">
+                <span className="text-xs text-slate-400 block mb-1.5">案件備註</span>
+                <div className="bg-yellow-50 text-yellow-700 px-4 py-2 rounded-2xl border border-yellow-200 text-sm whitespace-pre-wrap leading-relaxed shadow-sm inline-flex items-start gap-1.5">
+                  <FileText size={16} className="mt-0.5 shrink-0" />
+                  <span className="font-medium">{form.globalRemark}</span>
+                </div>
               </div>
             )}
 

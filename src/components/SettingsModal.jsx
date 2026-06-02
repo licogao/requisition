@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Save, Settings, Layers, Briefcase, Users, AlertCircle, Edit2, Check, User, Filter, ArrowUp, ArrowDown } from 'lucide-react';
+import { X, Plus, Trash2, Save, Settings, Layers, Briefcase, Users, AlertCircle, Edit2, Check, User, Filter, ArrowUp, ArrowDown, FileText } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 
 const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAlert, openConfirm }) => {
   const [activeTab, setActiveTab] = useState('units');
-  const [localData, setLocalData] = useState({ units: [], projects: [], vendors: [], applicants: {} });
+  const [localData, setLocalData] = useState({ units: [], projects: [], vendors: [], applicants: {}, remarks: [] });
   const [newItem, setNewItem] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   
@@ -20,7 +20,7 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
       if (initialData) {
         let apps = initialData.applicantOptions || initialData.applicants || {};
         if (Array.isArray(apps)) apps = { "未分類": apps };
-        setLocalData({ ...initialData, applicants: apps });
+        setLocalData({ ...initialData, applicants: apps, remarks: initialData.remarks || [] });
 
         if (initialData.units && initialData.units.length > 0) {
             setSelectedUnitForPerson(initialData.units[0]);
@@ -36,6 +36,7 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
     { id: 'applicants', label: '申請人', icon: <User size={18} /> }, 
     { id: 'projects', label: '計畫來源', icon: <Briefcase size={18} /> },
     { id: 'vendors', label: '常用廠商', icon: <Users size={18} /> },
+    { id: 'remarks', label: '常用備註', icon: <FileText size={18} /> },
   ];
 
   const getCurrentList = () => {
@@ -131,7 +132,7 @@ const SettingsModal = ({ isOpen, onClose, initialData, onSave, db, appId, openAl
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
         
         <div className="p-4 md:p-6 border-b flex justify-between items-center bg-slate-50 rounded-t-xl shrink-0">
           <div>
