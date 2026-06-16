@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { updateDoc, doc, query, deleteDoc, getDocs, where, serverTimestamp, collection } from 'firebase/firestore'; 
-import { Plus, Search, Flame, Filter, Edit2, Upload, Download, FileText, Clock, FolderCog, ShoppingCart, X, Loader2, Box, FileJson, FileSpreadsheet, Cloud, Copy, ArrowRight, RotateCcw, UserCheck, CheckCheck, CheckSquare } from 'lucide-react';
+import { 
+  collection, addDoc, updateDoc, doc, query, deleteDoc, setDoc, writeBatch, getDocs, where, serverTimestamp, limit, orderBy 
+} from 'firebase/firestore'; 
+import { 
+  Plus, Search, Calendar, Flame, Filter, Edit2, Upload, Download, LogOut, FileText, Clock, FolderCog, ShoppingCart, X, Loader2, Settings, Box, Wrench, Activity, FileJson, FileSpreadsheet, Cloud, Copy, ArrowRight, RotateCcw, UserCheck, CheckCheck, CheckSquare 
+} from 'lucide-react';
 
 import { db, appId } from './firebase'; 
-import { STATUS_STEPS, REVERSE_STEPS } from './constants';
-import { generateMonthList, getOperatorName } from './utils';
+import { STATUS_STEPS, DEFAULT_DOMAIN, REVERSE_STEPS } from './constants';
+import { isoToMinguo, generateMonthList, getOperatorName, generateCSV, downloadCSV, generateBackupJSON, downloadJSON, processBackupImport } from './utils';
 import { logAction, LOG_TYPES } from './logger'; 
 
+// 引入拆分出去的 Hooks
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './hooks/useSettings';
 import { useForms } from './hooks/useForms';
@@ -30,13 +35,15 @@ import CsvViewerModal from './components/CsvViewerModal';
 import AppHeader from './components/AppHeader';
 import FilterBar from './components/FilterBar';
 
+const ADMIN_EMAILS = [`268${DEFAULT_DOMAIN}`]; 
+
 export default function App() {
   const { 
     user, loading: authLoading, error: authError, 
     login: handleLogin, loginAnonymous: handleAnonymousLogin, logout: handleLogout            
   } = useAuth();
 
-  const { unitOptions, projectOptions, vendorOptions, applicantOptions, remarkOptions, checkAndSaveNewOptions } = useSettings(user);
+  const { unitOptions, projectOptions, vendorOptions, applicantOptions, remarkOptions = [], checkAndSaveNewOptions } = useSettings(user);
   const { forms, setForms, loading: formsLoading } = useForms(user);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -58,25 +65,32 @@ export default function App() {
   const [expandedId, setExpandedId] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, type: 'alert', title: '', message: '' });
 
-  const { handleBatchAction } = useBatchActions({
-    db, appId, user, forms, selectedIds, setSelectedIds, setModal,
-    formSetters: useMemo(() => ({}), []) 
-  });
+  const [isCustomRemark, setIsCustomRemark] = useState(false);
 
+  // 宣告 formSetters 給 useBatchActions
+  const formSetters = useMemo(() => ({}), []);
+  
   const {
     newUnit, setNewUnit, newApplicant, setNewApplicant,
     newSubsidy, setNewSubsidy, newVendor, setNewVendor,
     newGlobalRemark, setNewGlobalRemark, newApplicationDate, setNewApplicationDate,
     isUrgent, setIsUrgent, previewSerialId, 
-    newItems, isFormOpen, setIsFormOpen, isEditMode, isCustomSubsidy, setIsCustomSubsidy, 
+    newItems, setNewItems, isFormOpen, setIsFormOpen, isEditMode, setIsEditMode, 
+    setEditingFormId, isCustomSubsidy, setIsCustomSubsidy, 
     isCustomVendor, setIsCustomVendor, isCustomUnit, setIsCustomUnit, 
-    isCustomApplicant, setIsCustomApplicant, isCustomRemark, setIsCustomRemark,
-    isSubmitting, totalAmount, availableApplicants,
+    isCustomApplicant, setIsCustomApplicant, isSubmitting, totalAmount, availableApplicants,
     handleAddItem, handleRemoveItem, handleItemChange,
-    handleOpenCreate, handleEditClick, handleFormSubmit, formSetters
+    handleOpenCreate, handleEditClick, handleFormSubmit: originalHandleFormSubmit
   } = useFormState({ 
     db, appId, user, forms, setModal,
-    unitOptions, projectOptions, vendorOptions, applicantOptions, remarkOptions, checkAndSaveNewOptions 
+    unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions 
+  });
+
+  // setters 綁定給 batch actions
+  Object.assign(formSetters, {
+    setNewUnit, setNewApplicant, setNewSubsidy, setNewVendor,
+    setIsUrgent, setNewGlobalRemark, setNewItems, setIsEditMode,
+    setEditingFormId, setIsFormOpen
   });
 
   const batchActions = useBatchActions({ db, appId, user, forms, selectedIds, setSelectedIds, setModal, formSetters });
@@ -91,6 +105,33 @@ export default function App() {
     handleConfirmExport, executeExport, handleExportMonth,
     handleImportFile, handleManageCompleted, handleDebugClear, openAlert
   } = useDataTransfer({ db, appId, user, forms, setForms, setModal });
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    const trimmedRemark = newGlobalRemark?.trim();
+    if (trimmedRemark && !remarkOptions.includes(trimmedRemark)) {
+        if (window.confirm(`是否將「${trimmedRemark}」加入常用案件背景備註？`)) {
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_settings', 'config1'), {
+                    remarks: [...remarkOptions, trimmedRemark]
+                }, { merge: true });
+            } catch (err) {
+                console.error("Save new remark error", err);
+            }
+        }
+    }
+    originalHandleFormSubmit(e);
+  };
+
+  useEffect(() => {
+    if (isFormOpen) {
+      if (isEditMode) {
+        setIsCustomRemark(newGlobalRemark && !remarkOptions.includes(newGlobalRemark) ? true : false);
+      } else {
+        setIsCustomRemark(false);
+      }
+    }
+  }, [isFormOpen, isEditMode, previewSerialId, newGlobalRemark, remarkOptions]);
 
   useEffect(() => {
     if (isSettingsOpen || isFormOpen || isExportModalOpen || modal.isOpen || isManageModalOpen || isDebugClearOpen || isLogViewerOpen || showExportFormatSelect || isCsvViewerOpen) {
@@ -248,10 +289,7 @@ export default function App() {
         const step = STATUS_STEPS[form.status];
         if (step && step.nextAction) {
              setModal({ isOpen: true, type: 'action', title: `確認${step.nextAction}`, message: `即將進入：${step.nextAction}`, showPickupInput: step.requirePickupName, onConfirm: async ({note, pickupName}) => {
-                 let targetStatus = null;
-                 const keys = Object.keys(STATUS_STEPS);
-                 const idx = keys.indexOf(form.status);
-                 if (idx !== -1 && idx < keys.length - 1) targetStatus = keys[idx + 1];
+                 const targetStatus = step.nextStatus;
                  if (targetStatus) {
                     const timestamp = new Date().toISOString();
                     const updatePayload = {
@@ -259,6 +297,7 @@ export default function App() {
                     };
                     if (pickupName) updatePayload.receiverName = pickupName;
                     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'school_forms', form.id), updatePayload);
+                    logAction(db, appId, user, LOG_TYPES.STATUS_CHANGE, `推進單號 ${form.serialId} 至 ${STATUS_STEPS[targetStatus].label}。${note ? '備註:'+note : ''}`);
                  }
              }});
         }

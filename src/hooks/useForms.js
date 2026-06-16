@@ -34,9 +34,9 @@ export const useForms = (user) => {
       if (initCount >= 2) setLoading(false);
     };
 
-    const qActive = query(
+       const qActive = query(
       formsRef, 
-      where('status', 'in', ['P1_ACCOUNTING', 'P1_RETURNED', 'P2_RECEIVED', 'P2_ACCOUNTING'])
+      where('status', 'in', ['P1_ACCOUNTING', 'P1_RETURNED', 'P2_COMBINED'])
     );
     const unsubActive = onSnapshot(qActive, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
