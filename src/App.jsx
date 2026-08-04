@@ -67,7 +67,7 @@ export default function App() {
 
   const [isCustomRemark, setIsCustomRemark] = useState(false);
 
-  // 宣告 formSetters 給 useBatchActions
+  // 避免解構問題，先宣告 formSetters 給 useBatchActions
   const formSetters = useMemo(() => ({}), []);
   
   const {
@@ -86,7 +86,7 @@ export default function App() {
     unitOptions, projectOptions, vendorOptions, applicantOptions, checkAndSaveNewOptions 
   });
 
-  // setters 綁定給 batch actions
+  // 將 setters 綁定給 batch actions
   Object.assign(formSetters, {
     setNewUnit, setNewApplicant, setNewSubsidy, setNewVendor,
     setIsUrgent, setNewGlobalRemark, setNewItems, setIsEditMode,
@@ -228,13 +228,15 @@ export default function App() {
       if (showUrgentOnly && !form.isUrgent) return false;
 
       const s = searchTerm.toLowerCase();
+      const searchNum = s.replace(/,/g, '');
       const match = !s || (
         (form.serialId && form.serialId.toLowerCase().includes(s)) ||
         (form.subject && form.subject.toLowerCase().includes(s)) ||
         (form.unit && form.unit.toLowerCase().includes(s)) ||
         (form.applicant && form.applicant.toLowerCase().includes(s)) ||
         (form.vendor && form.vendor.toLowerCase().includes(s)) ||
-        (form.globalRemark && form.globalRemark.toLowerCase().includes(s))
+        (form.globalRemark && form.globalRemark.toLowerCase().includes(s)) ||
+        (form.totalPrice !== undefined && form.totalPrice !== null && String(form.totalPrice).includes(searchNum))
       );
       if (!match) return false;
       
