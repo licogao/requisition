@@ -228,7 +228,8 @@ export default function App() {
       if (showUrgentOnly && !form.isUrgent) return false;
 
       const s = searchTerm.toLowerCase();
-      const searchNum = s.replace(/,/g, '');
+      // ★ 移除逗號方便比對金額數字
+      const searchNum = s.replace(/,/g, ''); 
       const match = !s || (
         (form.serialId && form.serialId.toLowerCase().includes(s)) ||
         (form.subject && form.subject.toLowerCase().includes(s)) ||
@@ -236,7 +237,10 @@ export default function App() {
         (form.applicant && form.applicant.toLowerCase().includes(s)) ||
         (form.vendor && form.vendor.toLowerCase().includes(s)) ||
         (form.globalRemark && form.globalRemark.toLowerCase().includes(s)) ||
-        (form.totalPrice !== undefined && form.totalPrice !== null && String(form.totalPrice).includes(searchNum))
+        // ★ 新增：支援金額搜尋
+        (form.totalPrice !== undefined && form.totalPrice !== null && String(form.totalPrice).includes(searchNum)) ||
+        // ★ 新增：支援計畫補助搜尋
+        (form.subsidy && form.subsidy.toLowerCase().includes(s))
       );
       if (!match) return false;
       

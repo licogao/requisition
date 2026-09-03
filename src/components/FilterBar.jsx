@@ -19,7 +19,7 @@ const FilterBar = ({
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text" 
-            placeholder="搜尋流水號、單位、採購項目、金額" 
+            placeholder="搜尋流水號、單位、計畫、採購項目、金額..." 
             value={searchTerm} 
             onChange={e => setSearchTerm(e.target.value)} 
             onKeyDown={e => e.key === 'Enter' && onCloudSearch()}
